@@ -450,13 +450,33 @@ export default function GrowthTree({ studyLogs, health, habits, goals, tasks, jo
     } else if (health.status === 'critical') {
       insights.push({
         type: 'health',
-        icon: AlertTriangle,
+        icon: Info,
         title: 'Tree Needs Care',
         description: 'Your tree requires attention in multiple areas.',
         severity: 'warning'
       })
     }
     
+    if (health.status === 'critical' || health.status === 'struggling') {
+      insights.push({
+        type: 'storm',
+        icon: Wind,
+        title: 'Looming Habit Storm',
+        description: 'Vitals decay has triggered a storm! Deepen your roots with recovery steps to prevent branch cracking.',
+        severity: 'warning'
+      })
+    }
+
+    if (env.water < 50 || env.sunlight < 40) {
+      insights.push({
+        type: 'nutrients',
+        icon: Droplets,
+        title: 'Nutrient Blockage Detected',
+        description: 'Low sleep or hydration is blocking cognitive absorption. Your study sessions are yielding 30% less retention.',
+        severity: 'warning'
+      })
+    }
+
     if (env.overall > 80) {
       insights.push({
         type: 'environment',
@@ -528,6 +548,9 @@ export default function GrowthTree({ studyLogs, health, habits, goals, tasks, jo
       
       // Draw branches
       drawBranches(ctx, width, height, treeData.branches, treeData.trunk, time)
+      
+      // Draw nutrient flow particles
+      drawNutrientParticles(ctx, width, height, time)
       
       // Draw leaves
       drawLeaves(ctx, width, height, treeData.leaves, time)
@@ -972,20 +995,28 @@ export default function GrowthTree({ studyLogs, health, habits, goals, tasks, jo
   }
   
   const drawWeatherEffects = (ctx, width, height, time) => {
-    if (weather === 'rain') {
-      for (let i = 0; i < 100; i++) {
+    const activeWeather = (treeHealth?.status === 'critical' || treeHealth?.status === 'struggling') ? 'storm' : weather
+    if (activeWeather === 'rain' || activeWeather === 'storm') {
+      const dropCount = activeWeather === 'storm' ? 200 : 100
+      for (let i = 0; i < dropCount; i++) {
         const x = Math.random() * width
-        const y = (time * 0.5 + i * 10) % height
-        const length = 10 + Math.random() * 10
+        const y = (time * (activeWeather === 'storm' ? 0.9 : 0.5) + i * 10) % height
+        const length = (activeWeather === 'storm' ? 15 : 10) + Math.random() * 10
         
         ctx.beginPath()
         ctx.moveTo(x, y)
-        ctx.lineTo(x - 2, y + length)
-        ctx.strokeStyle = 'rgba(100, 149, 237, 0.5)'
-        ctx.lineWidth = 1
+        ctx.lineTo(x - (activeWeather === 'storm' ? 4 : 2), y + length)
+        ctx.strokeStyle = activeWeather === 'storm' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(100, 149, 237, 0.5)'
+        ctx.lineWidth = activeWeather === 'storm' ? 1.5 : 1
         ctx.stroke()
       }
-    } else if (weather === 'snow') {
+      
+      // Draw lightning flashes in a storm
+      if (activeWeather === 'storm' && Math.random() < 0.015) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
+        ctx.fillRect(0, 0, width, height)
+      }
+    } else if (activeWeather === 'snow') {
       for (let i = 0; i < 50; i++) {
         const x = Math.random() * width
         const y = (time * 0.2 + i * 20) % height
@@ -996,7 +1027,7 @@ export default function GrowthTree({ studyLogs, health, habits, goals, tasks, jo
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
         ctx.fill()
       }
-    } else if (weather === 'cloudy') {
+    } else if (activeWeather === 'cloudy') {
       for (let i = 0; i < 5; i++) {
         const x = (i * width / 5) + Math.sin(time * 0.001 + i) * 20
         const y = 50 + Math.sin(time * 0.002 + i) * 10
@@ -1006,6 +1037,56 @@ export default function GrowthTree({ studyLogs, health, habits, goals, tasks, jo
         ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'
         ctx.fill()
       }
+    }
+  }
+
+  const drawNutrientParticles = (ctx, width, height, time) => {
+    const centerX = width / 2
+    const centerY = height * 0.85
+    
+    // Draw 15 particles rising up
+    for (let i = 0; i < 15; i++) {
+      const progress = ((time * 0.2) + (i / 15)) % 1
+      
+      let x = centerX
+      let y = centerY
+      
+      const rootIndex = i % (treeData.roots?.length || 1)
+      const root = treeData.roots?.[rootIndex]
+      const branchIndex = i % (treeData.branches?.length || 1)
+      const branch = treeData.branches?.[branchIndex]
+      
+      if (progress < 0.4) {
+        // Traveling up the root: from tip to center
+        if (root) {
+          const tipX = centerX + Math.cos(root.angle) * root.length
+          const tipY = centerY + Math.sin(root.angle) * root.length
+          x = tipX + (centerX - tipX) * (progress / 0.4)
+          y = tipY + (centerY - tipY) * (progress / 0.4)
+        }
+      } else if (progress < 0.7) {
+        // Traveling up the trunk
+        const trunkProgress = (progress - 0.4) / 0.3
+        const trunkHeight = 80 + (treeData.trunk / 2)
+        x = centerX
+        y = centerY - trunkHeight * trunkProgress
+      } else {
+        // Traveling along a branch
+        const branchProgress = (progress - 0.7) / 0.3
+        const trunkHeight = 80 + (treeData.trunk / 2)
+        if (branch) {
+          const branchEndX = centerX + Math.cos(branch.angle) * branch.length
+          const branchEndY = (centerY - trunkHeight) + Math.sin(branch.angle) * branch.length
+          x = centerX + (branchEndX - centerX) * branchProgress
+          y = (centerY - trunkHeight) + (branchEndY - (centerY - trunkHeight)) * branchProgress
+        }
+      }
+      
+      ctx.beginPath()
+      ctx.arc(x, y, 3, 0, Math.PI * 2)
+      const absorptionGood = (environmentalFactors?.water || 100) > 50
+      ctx.fillStyle = absorptionGood ? '#10b981' : '#f97316'
+      ctx.fill()
     }
   }
   

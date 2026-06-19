@@ -573,6 +573,29 @@ export default function NeuralNetworkDashboard({ subjects, skills, goals, habits
       })
     }
     
+    // Bridging recommendation
+    if (clusters.length >= 2) {
+      insights.push({
+        type: 'bridge',
+        icon: GitBranch,
+        title: 'Cross-Domain Synaptic Bridge Suggested',
+        description: `Bridge '${clusters[0].name}' and '${clusters[1].name}': Develop a project combining both fields to accelerate cognitive synthesis.`,
+        severity: 'success'
+      })
+    }
+
+    // Congestion warning
+    const congestedNodes = nodes.filter(n => n.connections.length >= 4)
+    congestedNodes.forEach(node => {
+      insights.push({
+        type: 'congestion',
+        icon: AlertTriangle,
+        title: `Synaptic Congestion: ${node.label}`,
+        description: `Node has ${node.connections.length} active links. High cognitive load detected - consider splitting tasks.`,
+        severity: 'warning'
+      })
+    })
+
     // Activity insights
     const lowActivityNodes = nodes.filter(n => n.activity < 0.3)
     if (lowActivityNodes.length > 0) {
@@ -927,11 +950,13 @@ export default function NeuralNetworkDashboard({ subjects, skills, goals, habits
       const floatY = Math.sin(time * 0.02 + node.x) * 2
       const floatX = Math.cos(time * 0.015 + node.y) * 2
       
+      const isCongested = node.connections.length >= 4
+      
       // Multi-layer glow effect
       const layers = [
-        { radius: node.size * 5, color: node.color, opacity: 0.05 },
-        { radius: node.size * 4, color: node.color, opacity: 0.1 },
-        { radius: node.size * 3, color: node.color, opacity: 0.2 },
+        { radius: node.size * (isCongested ? 8 : 5), color: isCongested ? '#f97316' : node.color, opacity: 0.05 },
+        { radius: node.size * (isCongested ? 6 : 4), color: isCongested ? '#f97316' : node.color, opacity: 0.1 },
+        { radius: node.size * (isCongested ? 4 : 3), color: isCongested ? '#ef4444' : node.color, opacity: 0.2 },
         { radius: node.size * 2, color: node.color, opacity: 0.4 }
       ]
       
@@ -949,6 +974,20 @@ export default function NeuralNetworkDashboard({ subjects, skills, goals, habits
         ctx.fill()
       })
       
+      // Draw rotating warning dotted ring around congested nodes
+      if (isCongested) {
+        ctx.save()
+        ctx.translate(x + floatX, y + floatY)
+        ctx.rotate(time * 0.5)
+        ctx.beginPath()
+        ctx.arc(0, 0, node.size + 6, 0, Math.PI * 2)
+        ctx.strokeStyle = '#f97316'
+        ctx.lineWidth = 1.5
+        ctx.setLineDash([3, 5])
+        ctx.stroke()
+        ctx.restore()
+      }
+
       // Activity pulse ring
       const pulseRadius = node.size + node.activity * 2
       const pulse = Math.sin(time * 0.003 + node.x) * 0.5 + 0.5

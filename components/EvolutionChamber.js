@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Search, Filter, Download, ZoomIn, ZoomOut, Maximize2, User, Sparkles, Trophy, Star, Shield, Sword, Crown, Zap, Target, Heart, Activity, Brain, BookOpen, Dumbbell, Flame, Gem, Award, Medal, X, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Info, TrendingUp, BarChart3, Lock, Unlock, CheckCircle2, Circle, Layers, Grid, List, Eye, EyeOff } from 'lucide-react'
 
-export default function EvolutionChamber({ stats, studyLogs, health, exercise, goals, tasks, habits, skills, journal }) {
+export default function EvolutionChamber({ stats, studyLogs, health, exercise, goals, tasks, habits, skills, journal, refresh }) {
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
   const [avatarState, setAvatarState] = useState({
@@ -37,6 +37,96 @@ export default function EvolutionChamber({ stats, studyLogs, health, exercise, g
   })
   const [unlockedCosmetics, setUnlockedCosmetics] = useState([])
   const [equippedCosmetics, setEquippedCosmetics] = useState([])
+
+  const [allocatedPoints, setAllocatedPoints] = useState({ strength: 0, agility: 0, intelligence: 0, vitality: 0, sense: 0 })
+  const [activeRaid, setActiveRaid] = useState(null)
+  const [streakCrucible, setStreakCrucible] = useState(null)
+  const [allocLoading, setAllocLoading] = useState(false)
+  const [raidLoading, setRaidLoading] = useState(false)
+  const [crucibleLoading, setCrucibleLoading] = useState(false)
+
+  useEffect(() => {
+    if (stats?.gameStats?.allocatedStats) {
+      setAllocatedPoints(stats.gameStats.allocatedStats)
+    }
+    if (stats?.gameStats?.activeRaid) {
+      setActiveRaid(stats.gameStats.activeRaid)
+    } else {
+      setActiveRaid(null)
+    }
+    if (stats?.gameStats?.streakCrucible) {
+      setStreakCrucible(stats.gameStats.streakCrucible)
+    } else {
+      setStreakCrucible(null)
+    }
+  }, [stats])
+
+  const handleAllocateStats = async () => {
+    setAllocLoading(true)
+    try {
+      const res = await fetch('/api/game/allocate-stats', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + localStorage.getItem('token')
+        },
+        body: JSON.stringify(allocatedPoints)
+      })
+      if (res.ok) {
+        if (refresh) refresh()
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setAllocLoading(false)
+    }
+  }
+
+  const handleBossRaid = async (action, goalId = null) => {
+    setRaidLoading(true)
+    try {
+      const res = await fetch('/api/game/boss-raid', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + localStorage.getItem('token')
+        },
+        body: JSON.stringify({ action, goalId })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setActiveRaid(data.activeRaid)
+        if (refresh) refresh()
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setRaidLoading(false)
+    }
+  }
+
+  const handleStreakCrucible = async (action) => {
+    setCrucibleLoading(true)
+    try {
+      const res = await fetch('/api/game/streak-crucible', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + localStorage.getItem('token')
+        },
+        body: JSON.stringify({ action })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setStreakCrucible(data.streakCrucible)
+        if (refresh) refresh()
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setCrucibleLoading(false)
+    }
+  }
   
   // Advanced avatar processing
   useEffect(() => {
@@ -879,7 +969,7 @@ export default function EvolutionChamber({ stats, studyLogs, health, exercise, g
           <div className="flex items-center justify-between">
             <span className="text-xs text-white/60 font-medium">View Mode</span>
             <div className="flex gap-1">
-              {['avatar', 'skills', 'achievements', 'stats'].map(mode => (
+              {['avatar', 'skills', 'achievements', 'stats', 'laboratory'].map(mode => (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
@@ -1125,6 +1215,182 @@ export default function EvolutionChamber({ stats, studyLogs, health, exercise, g
             </motion.div>
             <p className="text-white/40 text-sm mb-2">Your evolution journey begins</p>
             <p className="text-white/30 text-xs">Start learning, exercising, and achieving goals to evolve</p>
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'laboratory' && (
+        <div className="absolute inset-0 z-20 overflow-y-auto bg-black/90 p-6 backdrop-blur-md flex flex-col lg:flex-row gap-6">
+          {/* STAT POINTS ALLOCATION */}
+          <div className="flex-1 glass-card p-6 rounded-2xl border border-violet-500/20 space-y-4">
+            <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+              <Shield className="w-5 h-5 text-violet-400" />
+              <h3 className="font-bold text-white text-lg">RPG Stat Allocation</h3>
+            </div>
+            
+            <p className="text-xs text-white/50">
+              Distribute your earned stat points to upgrade your hunter capabilities. Unspent points: <span className="font-bold text-violet-400">{stats?.gameStats?.unspentPoints || 0}</span>
+            </p>
+
+            <div className="space-y-4">
+              {['strength', 'agility', 'intelligence', 'vitality', 'sense'].map(attr => {
+                const baseVal = stats?.gameStats?.attributes?.[attr] || 10
+                const allocVal = allocatedPoints[attr] || 0
+                return (
+                  <div key={attr} className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5">
+                    <span className="text-xs text-white/80 capitalize font-medium">{attr}</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => {
+                          if (allocVal > (stats?.gameStats?.allocatedStats?.[attr] || 0)) {
+                            setAllocatedPoints(prev => ({ ...prev, [attr]: allocVal - 1 }))
+                          }
+                        }}
+                        className="w-6 h-6 rounded bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs font-bold transition-colors"
+                      >
+                        -
+                      </button>
+                      <span className="text-xs text-white font-bold min-w-[30px] text-center">{baseVal}</span>
+                      <button
+                        onClick={() => {
+                          const spent = Object.values(allocatedPoints).reduce((sum, val) => sum + val, 0)
+                          const totalAvailable = Math.max(0, ((stats?.gameStats?.level || 1) - 1) * 5)
+                          if (spent < totalAvailable) {
+                            setAllocatedPoints(prev => ({ ...prev, [attr]: allocVal + 1 }))
+                          }
+                        }}
+                        className="w-6 h-6 rounded bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs font-bold transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <button
+              onClick={handleAllocateStats}
+              disabled={allocLoading}
+              className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition-colors shadow-lg shadow-violet-500/20 disabled:opacity-50"
+            >
+              {allocLoading ? 'Saving...' : 'Save Attribute Points'}
+            </button>
+          </div>
+
+          {/* BOSS RAID SEQUENCER */}
+          <div className="flex-1 glass-card p-6 rounded-2xl border border-cyan-500/20 space-y-4">
+            <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+              <Sword className="w-5 h-5 text-cyan-400" />
+              <h3 className="font-bold text-white text-lg">Quest Boss Raid</h3>
+            </div>
+
+            {activeRaid ? (
+              <div className="space-y-4">
+                <div className="bg-white/5 p-4 rounded-xl space-y-2 border border-white/5">
+                  <div className="flex justify-between text-xs font-bold text-white">
+                    <span>Boss: {activeRaid.title}</span>
+                    <span className="text-red-400">{activeRaid.health}/100 HP</span>
+                  </div>
+                  <div className="w-full h-3 bg-black/50 rounded-full overflow-hidden border border-red-500/20">
+                    <motion.div
+                      animate={{ width: `${activeRaid.health}%` }}
+                      className="h-full bg-gradient-to-r from-red-600 to-red-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="h-32 bg-black/60 rounded-xl p-3 border border-white/5 overflow-y-auto space-y-1 font-mono text-[10px] text-emerald-400">
+                  {activeRaid.combatLogs?.map((log, i) => (
+                    <div key={i} className="leading-tight">
+                      <span className="text-white/30">[{new Date(log.time).toLocaleTimeString()}]</span> {log.text}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleBossRaid('strike')}
+                    disabled={raidLoading || activeRaid.health === 0}
+                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs transition-colors disabled:opacity-50"
+                  >
+                    Strike Boss
+                  </button>
+                  <button
+                    onClick={() => handleBossRaid('flee')}
+                    disabled={raidLoading}
+                    className="py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors"
+                  >
+                    Flee
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-white/50">
+                  Select a milestone quest to launch a Dungeon Boss Raid. Defeating the boss awards massive XP.
+                </p>
+                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                  {goals?.filter(g => g.progress < 100).map(goal => (
+                    <div key={goal.id} className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5">
+                      <div className="flex-1 min-w-0 mr-2">
+                        <div className="text-xs text-white font-semibold truncate">{goal.title}</div>
+                        <div className="text-[10px] text-white/40">Category: {goal.category}</div>
+                      </div>
+                      <button
+                        onClick={() => handleBossRaid('start', goal.id)}
+                        disabled={raidLoading}
+                        className="px-3 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-400 text-[10px] font-bold border border-cyan-500/30 transition-colors shrink-0"
+                      >
+                        Raid
+                      </button>
+                    </div>
+                  ))}
+                  {goals?.filter(g => g.progress < 100).length === 0 && (
+                    <div className="text-center text-xs text-white/30 py-6">No pending milestones to raid.</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* STREAK INSURANCE CRUCIBLE */}
+          <div className="w-full lg:w-[280px] glass-card p-6 rounded-2xl border border-amber-500/20 space-y-4">
+            <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+              <Zap className="w-5 h-5 text-amber-400" />
+              <h3 className="font-bold text-white text-lg">Streak Crucible</h3>
+            </div>
+
+            {streakCrucible?.active ? (
+              <div className="space-y-4">
+                <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl space-y-2 text-center">
+                  <div className="text-xs font-bold text-amber-400">CRUCIBLE ACTIVE</div>
+                  <p className="text-[10px] text-white/80 leading-relaxed">{streakCrucible.desc}</p>
+                </div>
+                
+                <button
+                  onClick={() => handleStreakCrucible('claim')}
+                  disabled={crucibleLoading}
+                  className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-colors"
+                >
+                  Verify & Claim Shield
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3 text-center py-4">
+                <div className="text-3xl">🛡️</div>
+                <p className="text-xs text-white/50 leading-relaxed">
+                  Lapsed streaks will reset to zero. Activate insurance to protect your chains.
+                </p>
+                <button
+                  onClick={() => handleStreakCrucible('start')}
+                  disabled={crucibleLoading}
+                  className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors"
+                >
+                  Start Crucible Insurance
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

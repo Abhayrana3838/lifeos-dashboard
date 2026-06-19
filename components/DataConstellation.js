@@ -204,6 +204,46 @@ export default function DataConstellation({ tasks, studyLogs, goals, journal, ha
         }
       })
       
+      // Apply Spaced Recall Orbit & Keystone Gravity Pulls
+      const keystones = stars.filter(s => s.type === 'habit' && (s.metadata.category === 'health' || s.metadata.streak >= 5))
+      
+      stars.forEach(star => {
+        // 1. Spaced Recall Orbit
+        if (star.type === 'study') {
+          const daysSince = star.metadata.daysSince || 0
+          const retention = Math.pow(0.5, daysSince / 7)
+          star.metadata.retention = `${Math.round(retention * 100)}%`
+          
+          const halfLife = 7
+          const optimalReviewDays = Math.max(0, Math.round(halfLife * Math.log2(0.8 / (retention || 0.1))))
+          star.metadata.optimalReviewIn = `${optimalReviewDays} days`
+          
+          // Push low retention stars outward
+          const dx = star.x - 50
+          const dy = star.y - 50
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1
+          const angle = Math.atan2(dy, dx)
+          
+          const newDist = Math.min(48, dist + (1 - retention) * 20)
+          star.x = 50 + Math.cos(angle) * newDist
+          star.y = 50 + Math.sin(angle) * newDist
+          
+          // Fade color to dim blue/grey if retention is low
+          if (retention < 0.5) {
+            star.color = '#38bdf8'
+            star.brightness = Math.max(0.2, star.brightness * 0.5)
+          }
+        }
+        
+        // 2. Keystone Gravity Pull
+        keystones.forEach(keystone => {
+          if (star.id !== keystone.id && star.metadata.category === keystone.metadata.category) {
+            star.x = star.x + (keystone.x - star.x) * 0.15
+            star.y = star.y + (keystone.y - star.y) * 0.15
+          }
+        })
+      })
+
       // Generate intelligent connections based on relationships
       generateConnections(stars, connections)
       

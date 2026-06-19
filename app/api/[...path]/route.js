@@ -100,6 +100,7 @@ async function remove(coll, id, userId) {
 // ── Stats Aggregator ──────────────────────────────────────
 async function getStats(userId) {
   const d = await db()
+  const uDoc = await d.collection('users').findOne({ id: userId }) || {}
   const t = today()
   const last7 = [...Array(7)].map((_, i) => {
     const dt = new Date(); dt.setDate(dt.getDate() - (6 - i)); return dt.toISOString().slice(0,10)
@@ -321,8 +322,31 @@ async function getStats(userId) {
     ...journals.slice(-10).map(j => ({ type: 'journal', label: `Reflected in Hunter Journal`, time: j.createdAt || j.date })),
     ...health.slice(-10).map(h => ({ type: 'health', label: `Registered Hunter Vitals`, time: h.createdAt || h.date })),
     ...goals.slice(-10).map(g => ({ type: 'goal', label: `Set Milestone Quest: ${g.title}`, time: g.createdAt || g.deadline, meta: `${g.progress || 0}%` })),
-    ...(userChats || []).slice(-10).map(c => ({ type: 'chat', label: `Transmitted Raid Signal: ${c.msg}`, time: c.createdAt })),
-  ].filter(x => x.time).sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0, 10)
+  ]
+  // Dynamic Muscle Fatigue Audit (CNS Overload forecasting)
+  const muscleFatigue = { chest: 0, back: 0, shoulders: 0, legs: 0, arms: 0, core: 0 }
+  const nowMs = Date.now()
+  exercises.forEach(ex => {
+    const exDate = new Date(ex.date || ex.createdAt)
+    const daysAgo = (nowMs - exDate.getTime()) / (1000 * 60 * 60 * 24)
+    if (daysAgo <= 5) {
+      const name = (ex.name || '').toLowerCase()
+      let group = 'core'
+      if (name.includes('press') || name.includes('chest') || name.includes('bench') || name.includes('fly') || name.includes('dip')) group = 'chest'
+      else if (name.includes('row') || name.includes('pull') || name.includes('lats') || name.includes('deadlift') || name.includes('back')) group = 'back'
+      else if (name.includes('squat') || name.includes('leg') || name.includes('lunge') || name.includes('calf') || name.includes('hamstring') || name.includes('quad')) group = 'legs'
+      else if (name.includes('shoulder') || name.includes('overhead') || name.includes('lateral') || name.includes('military')) group = 'shoulders'
+      else if (name.includes('curl') || name.includes('tricep') || name.includes('bicep') || name.includes('arm')) group = 'arms'
+      else if (name.includes('crunch') || name.includes('plank') || name.includes('abs') || name.includes('situp')) group = 'core'
+      
+      const volume = (Number(ex.sets) || 3) * (Number(ex.reps) || 10)
+      const decay = Math.max(0, 1 - (daysAgo * 0.2)) // 20% decay per day
+      muscleFatigue[group] = Math.min(100, muscleFatigue[group] + volume * 0.8 * decay)
+    }
+  })
+  Object.keys(muscleFatigue).forEach(k => {
+    muscleFatigue[k] = Math.round(muscleFatigue[k])
+  })
 
   return {
     today: t, todayStudy: +todayStudy.toFixed(2),
@@ -338,20 +362,28 @@ async function getStats(userId) {
       level,
       rank,
       rankColor,
+      muscleFatigue,
       // RPG Attributes
       attributes: {
-        strength: 10 + Math.round((exercises.length * 2.5) + (tasksDone * 0.8)),
-        agility: 10 + Math.round((habitLogs.length * 0.6) + (streak * 1.5)),
-        intelligence: 10 + Math.round((totalHours * 1.5) + (knowledge.length * 4)),
-        vitality: 10 + Math.round((health.length * 2.5) + (sleepAvg * 1.5)),
-        sense: 10 + Math.round((totalMeditationMinutes / 5) + (journals.length * 3))
+        strength: 10 + Math.round((exercises.length * 2.5) + (tasksDone * 0.8)) + (uDoc.allocatedStats?.strength || 0),
+        agility: 10 + Math.round((habitLogs.length * 0.6) + (streak * 1.5)) + (uDoc.allocatedStats?.agility || 0),
+        intelligence: 10 + Math.round((totalHours * 1.5) + (knowledge.length * 4)) + (uDoc.allocatedStats?.intelligence || 0),
+        vitality: 10 + Math.round((health.length * 2.5) + (sleepAvg * 1.5)) + (uDoc.allocatedStats?.vitality || 0),
+        sense: 10 + Math.round((totalMeditationMinutes / 5) + (journals.length * 3)) + (uDoc.allocatedStats?.sense || 0)
       },
+      allocatedStats: uDoc.allocatedStats || { strength: 0, agility: 0, intelligence: 0, vitality: 0, sense: 0 },
+      unspentPoints: (() => {
+        const spent = Object.values(uDoc.allocatedStats || {}).reduce((sum, val) => sum + val, 0)
+        return Math.max(0, (level - 1) * 5 - spent)
+      })(),
+      activeRaid: uDoc.activeRaid || null,
+      streakCrucible: uDoc.streakCrucible || null,
       hunterClass: (() => {
-        const sVal = 10 + Math.round((exercises.length * 2.5) + (tasksDone * 0.8))
-        const aVal = 10 + Math.round((habitLogs.length * 0.6) + (streak * 1.5))
-        const iVal = 10 + Math.round((totalHours * 1.5) + (knowledge.length * 4))
-        const vVal = 10 + Math.round((health.length * 2.5) + (sleepAvg * 1.5))
-        const snVal = 10 + Math.round((totalMeditationMinutes / 5) + (journals.length * 3))
+        const sVal = 10 + Math.round((exercises.length * 2.5) + (tasksDone * 0.8)) + (uDoc.allocatedStats?.strength || 0)
+        const aVal = 10 + Math.round((habitLogs.length * 0.6) + (streak * 1.5)) + (uDoc.allocatedStats?.agility || 0)
+        const iVal = 10 + Math.round((totalHours * 1.5) + (knowledge.length * 4)) + (uDoc.allocatedStats?.intelligence || 0)
+        const vVal = 10 + Math.round((health.length * 2.5) + (sleepAvg * 1.5)) + (uDoc.allocatedStats?.vitality || 0)
+        const snVal = 10 + Math.round((totalMeditationMinutes / 5) + (journals.length * 3)) + (uDoc.allocatedStats?.sense || 0)
         const maxVal = Math.max(sVal, aVal, iVal, vVal, snVal)
         if (maxVal === 10) return 'Shadow Monarch'
         if (maxVal === iVal) return 'Shadow Mage'
@@ -363,7 +395,39 @@ async function getStats(userId) {
       combatPower,
       mindSharpness,
       totalHours,
-      totalMeditationMinutes
+      totalMeditationMinutes,
+      recoveryScore: (() => {
+        const latestHealth = health[health.length - 1] || {}
+        const sleepHrs = Number(latestHealth.sleep !== undefined ? latestHealth.sleep : 8)
+        const waterLtrs = Number(latestHealth.water !== undefined ? latestHealth.water : 3)
+        const energyRating = Number(latestHealth.energy !== undefined ? latestHealth.energy : 5)
+        const sleepScore = Math.min(100, (sleepHrs / 8) * 100)
+        const waterScore = Math.min(100, (waterLtrs / 3) * 100)
+        const energyScore = Math.min(100, (energyRating / 5) * 100)
+        return Math.round((sleepScore + waterScore + energyScore) / 3)
+      })(),
+      fatigueActive: (() => {
+        const latestHealth = health[health.length - 1] || {}
+        const sleepHrs = Number(latestHealth.sleep !== undefined ? latestHealth.sleep : 8)
+        const waterLtrs = Number(latestHealth.water !== undefined ? latestHealth.water : 3)
+        const energyRating = Number(latestHealth.energy !== undefined ? latestHealth.energy : 5)
+        const sleepScore = Math.min(100, (sleepHrs / 8) * 100)
+        const waterScore = Math.min(100, (waterLtrs / 3) * 100)
+        const energyScore = Math.min(100, (energyRating / 5) * 100)
+        const score = Math.round((sleepScore + waterScore + energyScore) / 3)
+        return score < 70
+      })(),
+      difficultyModifier: (() => {
+        const latestHealth = health[health.length - 1] || {}
+        const sleepHrs = Number(latestHealth.sleep !== undefined ? latestHealth.sleep : 8)
+        const waterLtrs = Number(latestHealth.water !== undefined ? latestHealth.water : 3)
+        const energyRating = Number(latestHealth.energy !== undefined ? latestHealth.energy : 5)
+        const sleepScore = Math.min(100, (sleepHrs / 8) * 100)
+        const waterScore = Math.min(100, (waterLtrs / 3) * 100)
+        const energyScore = Math.min(100, (energyRating / 5) * 100)
+        const score = Math.round((sleepScore + waterScore + energyScore) / 3)
+        return score < 70 ? 0.7 : 1.0
+      })()
     }
   }
 }
@@ -628,6 +692,71 @@ Generate 6-10 actionable items for the day. Optimize the schedule for maximum pr
   }
 }
 
+// AI Workout Generator
+async function handleAIChatWorkout(body) {
+  try {
+    const { 
+      goal = 'Hypertrophy', 
+      split = 'Full Body', 
+      level = 'intermediate',
+      includeExercises = '',
+      excludeExercises = '',
+      duration = '60',
+      intensity = 'Medium'
+    } = body
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) return err('OPENAI_API_KEY not configured')
+
+    const { OpenAI } = await import('openai')
+    const openai = new OpenAI({ apiKey })
+
+    const systemPrompt = `You are a world-class biomechanical athletic trainer. 
+Design an optimized workout routine based on the user's goals and splits.
+Always respond with VALID JSON only — no markdown formatting, no explanations outside the JSON.`
+
+    const userPrompt = `Design a workout routine for a ${level} level athlete targeting "${goal}" using a "${split}" split.
+Ensure it satisfies the following constraints:
+- Target Session Duration: ${duration} minutes
+- Intensity Level: ${intensity} (Adjust the reps, sets, and tempo accordingly)
+${includeExercises ? `- Force-include these exercises: ${includeExercises}` : ''}
+${excludeExercises ? `- Exclude/Avoid these exercises: ${excludeExercises}` : ''}
+
+Return a JSON object with this exact structure:
+{
+  "routineName": "Routine Title",
+  "focus": "Brief focus description",
+  "exercises": [
+    {
+      "name": "Exercise Name",
+      "muscleGroup": "Chest|Back|Shoulders|Legs|Arms|Core",
+      "sets": number,
+      "reps": number,
+      "weightSuggestion": "suggested weight e.g. 70% 1RM",
+      "notes": "Form tip"
+    }
+  ]
+}`
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.7,
+      max_tokens: 2500,
+    })
+
+    const raw = completion.choices[0].message.content
+    const data = JSON.parse(raw)
+    return ok({ success: true, workout: data })
+  } catch (e) {
+    console.error('Workout Generator error:', e)
+    return err(e.message || 'Failed to generate workout', 500)
+  }
+}
+
 // ── Router ────────────────────────────────────────────────
 async function handler(request, { params }) {
   try {
@@ -703,6 +832,7 @@ async function handler(request, { params }) {
     if (path === 'ai/chat'       && method === 'POST') return handleAIChat(body)
     if (path === 'ai/generate-quiz' && method === 'POST') return handleAIGenerateQuiz(body)
     if (path === 'ai/generate-daily-plan' && method === 'POST') return handleAIGenerateDailyPlan(body)
+    if (path === 'ai/generate-workout' && method === 'POST') return handleAIChatWorkout(body)
 
     // GUILDS ROUTES
     if (path === 'guilds/chat' && method === 'GET') {
@@ -714,6 +844,37 @@ async function handler(request, { params }) {
       const lastMsg = chatLogs[chatLogs.length - 1]
       const now = new Date()
       if (!lastMsg || (now - new Date(lastMsg.createdAt)) > 25000) {
+        // Fetch user stats to target weak points
+        const stats = await getStats(currentUser.id)
+        const attrs = stats?.gameStats?.attributes || { strength: 10, agility: 10, intelligence: 10, vitality: 10, sense: 10 }
+        
+        // Find weakest attribute
+        const minAttr = Math.min(attrs.strength, attrs.agility, attrs.intelligence, attrs.vitality, attrs.sense)
+        
+        let customBotMsg = null
+        let customBotId = 'bot_kahn'
+        const cleanUserName = currentUser.name.split(' ')[0]
+        
+        if (minAttr === attrs.intelligence) {
+          customBotId = 'bot_monarch'
+          customBotMsg = `@${cleanUserName}, your INT (Intelligence) node is fading in the Cognitive Matrix. Log some study hours or clear the Revision Gate!`
+        } else if (minAttr === attrs.strength) {
+          customBotId = 'bot_kahn'
+          customBotMsg = `@${cleanUserName}, your STR (Strength) attribute is low. Log a physical training workout to reinforce your Vanguard stats!`
+        } else if (minAttr === attrs.agility) {
+          customBotId = 'bot_lina'
+          customBotMsg = `@${cleanUserName}, your AGI (Agility) is lacking. Build your routine chains in the Habits Chamber!`
+        } else if (minAttr === attrs.vitality) {
+          customBotId = 'bot_iron'
+          customBotMsg = `@${cleanUserName}, vital signs indicate fatigue. Log your sleep and recovery in the Vitals log, or rest!`
+        } else {
+          customBotId = 'bot_shadow'
+          customBotMsg = `@${cleanUserName}, your SEN (Sense) focus is decaying. Calming breathing in the Meditation Chamber will restore focus.`
+        }
+
+        // 35% chance to post a targeted mentor tip, otherwise standard guild LFG message
+        const isTargeted = Math.random() < 0.4
+        
         const botTemplates = [
           { userId: 'bot_kahn', msg: 'Need a tank for the D-Rank Goblin gate! Immediate entry.', name: 'IronFist Kahn' },
           { userId: 'bot_lina', msg: 'Ready to support. Clean records, B-rank healing certificate.', name: 'Healer Lina' },
@@ -723,7 +884,11 @@ async function handler(request, { params }) {
           { userId: 'bot_iron', msg: 'Help! Orc Lord is crushing our tank! Need immediate healer backing!', name: 'Iron Shield' },
           { userId: 'bot_monarch', msg: 'Has anyone seen the boss room in the Jeju dungeon? It looks insane.', name: 'Shadow Monarch' }
         ]
-        const pick = botTemplates[Math.floor(Math.random() * botTemplates.length)]
+        
+        const pick = isTargeted && customBotMsg 
+          ? { userId: customBotId, msg: customBotMsg } 
+          : botTemplates[Math.floor(Math.random() * botTemplates.length)]
+
         await d.collection('guild_chat').insertOne({
           id: uuid(),
           userId: pick.userId,
@@ -1185,6 +1350,99 @@ async function handler(request, { params }) {
       return ok(updatedPlan)
     }
 
+    // GAME SYSTEMS
+    if (path === 'game/allocate-stats' && method === 'POST') {
+      if (!currentUser) return err('Unauthorized', 401)
+      const { strength = 0, agility = 0, intelligence = 0, vitality = 0, sense = 0 } = body
+      const d = await db()
+      const stats = await getStats(currentUser.id)
+      const level = stats.gameStats.level
+      const totalAvailable = Math.max(0, (level - 1) * 5)
+      const requestedTotal = strength + agility + intelligence + vitality + sense
+      if (requestedTotal > totalAvailable) {
+        return err('Insufficient stat points available')
+      }
+      await d.collection('users').updateOne(
+        { id: currentUser.id },
+        { $set: { allocatedStats: { strength, agility, intelligence, vitality, sense } } }
+      )
+      return ok({ success: true, allocatedStats: { strength, agility, intelligence, vitality, sense } })
+    }
+
+    if (path === 'game/boss-raid' && method === 'POST') {
+      if (!currentUser) return err('Unauthorized', 401)
+      const { goalId, action } = body
+      const d = await db()
+      if (action === 'start') {
+        const goal = await d.collection('goals').findOne({ id: goalId, userId: currentUser.id })
+        if (!goal) return err('Goal not found', 404)
+        const activeRaid = {
+          goalId,
+          title: goal.title,
+          health: 100,
+          maxHealth: 100,
+          combatLogs: [{ text: `A wild dungeon boss guarding milestone [${goal.title}] has appeared!`, time: new Date().toISOString() }],
+          startedAt: new Date().toISOString()
+        }
+        await d.collection('users').updateOne({ id: currentUser.id }, { $set: { activeRaid } })
+        return ok({ success: true, activeRaid })
+      } else if (action === 'strike') {
+        const userDoc = await d.collection('users').findOne({ id: currentUser.id })
+        const activeRaid = userDoc.activeRaid
+        if (!activeRaid) return err('No active boss raid found')
+        const damage = Math.floor(Math.random() * 20) + 15
+        const newHealth = Math.max(0, activeRaid.health - damage)
+        const logText = `You performed a critical slash dealing ${damage} damage to the boss! (${newHealth}/100 HP remaining)`
+        activeRaid.health = newHealth
+        activeRaid.combatLogs.push({ text: logText, time: new Date().toISOString() })
+        if (newHealth === 0) {
+          activeRaid.combatLogs.push({ text: `VICTORY! The dungeon boss guarding [${activeRaid.title}] was defeated! You earned a massive XP bonus.`, time: new Date().toISOString() })
+          await d.collection('study_logs').insertOne({
+            id: uuid(),
+            userId: currentUser.id,
+            subject: 'Raid Victory',
+            topic: activeRaid.title,
+            date: today(),
+            hours: 4,
+            difficulty: 'hard',
+            understanding: 5,
+            notes: `Defeated the boss of milestone: ${activeRaid.title}`,
+            createdAt: new Date().toISOString()
+          })
+        }
+        await d.collection('users').updateOne({ id: currentUser.id }, { $set: { activeRaid } })
+        return ok({ success: true, activeRaid })
+      } else if (action === 'flee') {
+        await d.collection('users').updateOne({ id: currentUser.id }, { $set: { activeRaid: null } })
+        return ok({ success: true, activeRaid: null })
+      }
+    }
+
+    if (path === 'game/streak-crucible' && method === 'POST') {
+      if (!currentUser) return err('Unauthorized', 401)
+      const { action } = body
+      const d = await db()
+      if (action === 'start') {
+        const streakCrucible = {
+          active: true,
+          taskType: 'Hard Study Session',
+          desc: 'Study a subject of your choice for 3+ hours today to protect your streak from resetting.',
+          deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        }
+        await d.collection('users').updateOne({ id: currentUser.id }, { $set: { streakCrucible } })
+        return ok({ success: true, streakCrucible })
+      } else if (action === 'claim') {
+        const stats = await getStats(currentUser.id)
+        const todayHours = stats.todayStudy || 0
+        if (todayHours >= 3) {
+          await d.collection('users').updateOne({ id: currentUser.id }, { $set: { streakCrucible: null } })
+          return ok({ success: true, message: 'Crucible completed! Your streak has been fully protected.', restored: true })
+        } else {
+          return err('Crucible conditions not met: You must log 3+ study hours today.')
+        }
+      }
+    }
+
     // ── Payment & Subscription ─────────────────────────────────
     if (path === 'payment/create-order') {
       if (!currentUser) return err('Unauthorized', 401)
@@ -1255,6 +1513,41 @@ async function handler(request, { params }) {
       })
 
       return ok({ subscription, message: 'Payment verified successfully' })
+    }
+
+    if (path === 'goku/speak') {
+      try {
+        const body = method === 'POST' ? await req.json() : {}
+        const { text, voice = 'onyx' } = body
+        if (!text) return err('Text required', 400)
+
+        const openAiRes = await fetch('https://api.openai.com/v1/audio/speech', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'tts-1',
+            voice: voice,
+            input: text
+          })
+        })
+
+        if (!openAiRes.ok) {
+          const errText = await openAiRes.text()
+          return err(`OpenAI TTS Error: ${errText}`, 500)
+        }
+
+        const buffer = await openAiRes.arrayBuffer()
+        return new NextResponse(buffer, {
+          headers: {
+            'Content-Type': 'audio/mpeg',
+          },
+        })
+      } catch (error) {
+        return err(error.message, 500)
+      }
     }
 
     if (path === 'subscription/status') {

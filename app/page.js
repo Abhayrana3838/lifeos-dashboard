@@ -13,7 +13,7 @@ import {
   Bot, Upload, FileText, Send, ChevronRight, Layers, BarChart, PieChart as PieIcon,
   Radar, Moon, Droplets, Weight, Star, ArrowRight, Loader2, MessageSquare,
   GraduationCap, Lightbulb, CheckSquare, Map, Timer, TreeDeciduous, Globe,
-  User, Waves, Infinity, Compass
+  User, Waves, Infinity, Compass, Shield, Volume2, VolumeX
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart as RBarChart, Bar, LineChart, Line,
@@ -312,7 +312,19 @@ function Dashboard({ stats, refresh, go }) {
               <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white flex items-baseline gap-2">
                 LEVEL <span className="text-cyan-400 font-mono hunter-title-glow">{g.level}</span>
               </h1>
-              <p className="text-white/40 text-xs uppercase tracking-widest mt-1">Status: Active Dual Dungeon Survivor</p>
+              <div className="flex flex-col gap-1 mt-1">
+                <p className="text-white/40 text-xs uppercase tracking-widest leading-none">Status: Active Dual Dungeon Survivor</p>
+                {g.fatigueActive && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-amber-500/30 bg-amber-500/5 text-[9px] text-amber-400 font-mono uppercase tracking-wider w-fit mt-1.5 shadow-[0_0_8px_rgba(245,158,11,0.15)]"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                    <span>Fatigue Active: Quest targets scaled to 70% • XP gains: +25% Endurance boost</span>
+                  </motion.div>
+                )}
+              </div>
             </div>
 
             {/* XP progress bar */}
@@ -1675,132 +1687,1245 @@ function Health({ refresh }) {
 }
 
 // ══════════════════════════════════════════════════════════
-// EXERCISE
+// GOKU POWER COMPANION
 // ══════════════════════════════════════════════════════════
-function Exercise({ refresh }) {
-  const [items, setItems] = useState([])
-  const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, duration: 0, calories: 0, date: todayISO(), notes: '' })
-  const load = () => api.get('exercises').then(setItems)
-  useEffect(() => { load() }, [])
+const GOKU_FORMS = [
+  {
+    id: 'base', name: 'Base Form', img: '/goku/base.png',
+    threshold: 0, aura: 'rgba(255,255,255,0)', auraColor: '#94a3b8',
+    bgGrad: 'linear-gradient(135deg, #0d1117 0%, #1a1a2e 100%)',
+    border: 'rgba(148,163,184,0.3)', glowColor: 'rgba(148,163,184,0.12)',
+    badge: '⬜ Mortal', xpLabel: 'Awakening',
+    quotes: [
+      "Every Saiyan starts somewhere. Begin your first set.",
+      "I am always calm before battle. Are you ready?",
+      "Train like there is no tomorrow. That is the Saiyan way.",
+      "A warrior's journey begins with a single rep."
+    ]
+  },
+  {
+    id: 'ssj1', name: 'Super Saiyan', img: '/goku/ssj1.png',
+    threshold: 10, aura: 'rgba(251,191,36,0.3)', auraColor: '#fbbf24',
+    bgGrad: 'linear-gradient(135deg, #0d1117 0%, #1a1000 100%)',
+    border: 'rgba(251,191,36,0.4)', glowColor: 'rgba(251,191,36,0.18)',
+    badge: '🌟 Super Saiyan', xpLabel: 'Power Rising',
+    quotes: [
+      "This anger — this PAIN — transforms into POWER! Don't stop now!",
+      "PUSH BEYOND YOUR LIMITS! The more you hurt, the stronger you get!",
+      "I have trained through worse pain. One more set — DO IT!",
+      "A real Super Saiyan doesn't rest until the dungeon is cleared!",
+      "Feel that burn? That is your body leveling up. KEEP GOING!"
+    ]
+  },
+  {
+    id: 'ssj2', name: 'Super Saiyan 2', img: '/goku/ssj2.png',
+    threshold: 30, aura: 'rgba(250,204,21,0.4)', auraColor: '#facc15',
+    bgGrad: 'linear-gradient(135deg, #0d1117 0%, #1a1400 100%)',
+    border: 'rgba(250,204,21,0.5)', glowColor: 'rgba(250,204,21,0.22)',
+    badge: '⚡ Super Saiyan 2', xpLabel: 'Lightning Surge',
+    quotes: [
+      "LIGHTNING CRACKLES IN MY VEINS! DO YOU FEEL IT?! PUSH HARDER!",
+      "This electric rage — channel it into your reps! DON'T HOLD BACK!",
+      "The difference between SSJ1 and SSJ2 is ONE MORE REP! GO!",
+      "I WILL NOT LOSE TO WEAKNESS! Neither will you!",
+      "The electricity around me is your willpower made visible. SURGE!"
+    ]
+  },
+  {
+    id: 'ssjblue', name: 'Super Saiyan Blue', img: '/goku/ssjblue.png',
+    threshold: 60, aura: 'rgba(6,182,212,0.35)', auraColor: '#06b6d4',
+    bgGrad: 'linear-gradient(135deg, #060d1a 0%, #001a2e 100%)',
+    border: 'rgba(6,182,212,0.5)', glowColor: 'rgba(6,182,212,0.22)',
+    badge: '💠 Super Saiyan Blue', xpLabel: 'God Ki Flowing',
+    quotes: [
+      "God Ki flows through every rep. You are not just training — you are ASCENDING.",
+      "Beerus said I could not handle divine power. I prove him wrong every session.",
+      "Blue transcends limits. So does your training. Don't stop — EVOLVE!",
+      "Whis watches your form. Make it perfect. One more — FLAWLESS!",
+      "This is not just physical training. This is the path to godhood. CLAIM IT!"
+    ]
+  },
+  {
+    id: 'ui', name: 'Ultra Instinct', img: '/goku/ui.png',
+    threshold: 100, aura: 'rgba(255,255,255,0.45)', auraColor: '#e2e8f0',
+    bgGrad: 'linear-gradient(135deg, #040406 0%, #0a0a14 50%, #000810 100%)',
+    border: 'rgba(255,255,255,0.55)', glowColor: 'rgba(255,255,255,0.25)',
+    badge: '✨ Ultra Instinct', xpLabel: 'Beyond Mastery',
+    quotes: [
+      "Ultra Instinct. The body moves without thought. Your muscles remember every rep.",
+      "In this state, there is no pain. Only the next set. TRANSCEND.",
+      "Even the angels cannot predict what you will achieve. BEYOND LIMITS.",
+      "Your body has become a weapon. Every exercise sharpens it further.",
+      "The silver aura means your limits are GONE. There are only new heights."
+    ]
+  }
+]
 
-  const submit = async () => {
-    if (!form.name) return toast.error('Workout name required')
-    if (editingId) {
-      await api.patch(`exercises/${editingId}`, form)
-      toast.success('Workout updated ✓')
-    } else {
-      await api.post('exercises', form)
-      toast.success('Workout logged ✓')
+const GOKU_SPEECHES = [
+  "Listen up! Master Roshi taught us: Work hard, study well, eat and sleep plenty! That is the Turtle Hermit way! We train not to defeat others, but to defeat our own weaknesses from yesterday. Let's do this set together, and push further!",
+  "Even a low-class warrior can surpass an elite if he puts his mind to it and works hard enough! Don't let anyone tell you what your limits are. Squeeze your core, breathe, and drive that weight up! Show them what Saiyan power looks like!",
+  "Power comes in response to a need, not a desire! You have to create that need! If you want to grow, you have to push your muscles to the absolute limit. Squeeze out one more rep! Let's go, push it!",
+  "If you don't like your destiny, don't accept it! Instead, have the courage to change it the way you want it to be. Every rep you complete is a step toward rewriting your destiny. Don't quit now, we are just getting started!",
+  "This is to go even further beyond! AAAAAAAAH! Feel the energy rising! Channel that power into this set. Don't look back, don't hesitate. Give it everything you've got!",
+  "I'm the Saiyan who came all the way from Earth for the sole purpose of beating you. A true warrior never gives up! Even if you feel like your muscles are about to snap, remember why you started! One more rep! Break through your limits!",
+  "When you feel like you can't lift another ounce, that's when the real training begins! Your mind will try to tell you to stop, but a Saiyan's body listens to nothing but the drive to grow stronger. Take a deep breath, focus your energy, and push!",
+  "There's no shortcut to strength! Every single drop of sweat, every single set where you felt like falling over, it all counts. It's the path to unleashing your true potential. Don't look at how far you have to go; focus on this very moment and crush it!",
+  "I've faced enemies that seemed completely unbeatable, but I never backed down! The secret isn't some magical power-up; it's simply refusing to quit no matter what. Keep your posture solid, squeeze your fists, and lift that weight like the universe depends on it!",
+  "If a low-class warrior like me can match the gods themselves through sheer dedication, then there is absolutely nothing you can't achieve! Push past the burning in your muscles. That burn is just weakness leaving your body! Let's go!",
+  "You can't just wish for a better version of yourself; you have to train for it every single day. When the morning is cold and you're tired, that's when you prove your resolve. Stand tall, brace your core, and let's get this set done!",
+  "My body is screaming at me to stop, but my spirit is telling me to go further! That's the Saiyan pride! You have that same fire inside you. Don't let it flicker out when the weight gets heavy. Blow it up into a blazing aura and conquer this lift!",
+  "We don't train to become better than others; we train to show ourselves what we are truly capable of. Every rep is a promise to your future self that you won't settle for average. Keep your eyes on the goal and drive it home!",
+  "Sometimes you fail, and that's okay. I've been beaten down more times than I can count. But what matters is that you get back up, dust yourself off, and try again with even more intensity! Let's conquer this set together!",
+  "Kaio-ken! Let's multiply our effort! Double the focus, double the power! Do not let the fatigue win. Squeeze out every ounce of energy from your reserves and make this final effort count! SAAAAAAH!"
+];
+
+const EXERCISE_ADVICE = {
+  'bench press': "Keep your feet flat on the floor, arch your lower back slightly, and squeeze your shoulder blades together. Push the bar in a slight arc, and don't flare your elbows out! Let's conquer this weight!",
+  'squat': "Keep your chest high, push your knees outward, and sit back as if sitting in a chair. Drop until your thighs are parallel to the floor, then drive up through your heels! Power up!",
+  'deadlift': "Keep the bar close to your shins, flatten your back, and drive through your legs. Don't let your spine round! Lift it with the fury of a Super Saiyan!",
+  'pull-up': "Pull from your elbows, squeeze your shoulder blades at the top, and lower yourself under control. Don't swing! Pure back power!",
+  'overhead press': "Brace your core, squeeze your glutes, and push the bar straight up overhead. Move your head back slightly to clear the bar, then lock it out!",
+  'bicep curl': "Keep your elbows pinned to your sides, don't swing your body, and squeeze the muscle hard at the top. Let's build those arms!",
+  'plank': "Keep your body in a straight line from head to heels. Squeeze your glutes, brace your abs, and breathe! Hold the stance, warrior!"
+};
+
+const getGokuAdvice = (exName, muscleGroup) => {
+  const nameLower = exName?.toLowerCase() || '';
+  for (const [key, advice] of Object.entries(EXERCISE_ADVICE)) {
+    if (nameLower.includes(key)) return advice;
+  }
+  
+  const muscleLower = muscleGroup?.toLowerCase() || '';
+  if (muscleLower.includes('chest') || muscleLower.includes('pec')) {
+    return "Keep your chest puffed out, squeeze your shoulder blades, and focus on the contraction of your pectorals. Push hard!";
+  }
+  if (muscleLower.includes('back') || muscleLower.includes('lat')) {
+    return "Focus on pulling with your elbows and squeezing your lats. Don't use momentum — let the back work!";
+  }
+  if (muscleLower.includes('shoulder') || muscleLower.includes('deltoid')) {
+    return "Keep your core braced and don't flare your shoulders excessively. Control the weight, warrior!";
+  }
+  if (muscleLower.includes('leg') || muscleLower.includes('quad') || muscleLower.includes('hamstring') || muscleLower.includes('glute')) {
+    return "Drive power from the floor through your heels! Squeeze your legs and keep your knees tracking over your toes!";
+  }
+  if (muscleLower.includes('arm') || muscleLower.includes('bicep') || muscleLower.includes('tricep')) {
+    return "Keep your elbows stable and isolate the muscle. Concentrate on the pump and squeeze!";
+  }
+  if (muscleLower.includes('core') || muscleLower.includes('ab') || muscleLower.includes('belly')) {
+    return "Keep your core braced, hold your breath slightly during the concentric phase, and pull your navel to your spine!";
+  }
+  
+  return "Keep your breathing steady, focus on the muscle mind connection, and push past your limits!";
+};
+
+
+function GokuCompanion({ items, activeSession }) {
+  const [quoteIdx, setQuoteIdx] = useState(0)
+  const [formIdx, setFormIdx] = useState(0)
+  const [powerAnim, setPowerAnim] = useState(false)
+  const [showUnlock, setShowUnlock] = useState(null)
+  
+  const [speechEnabled, setSpeechEnabled] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [showSpeakTip, setShowSpeakTip] = useState(true)
+  
+  const [speechIdx, setSpeechIdx] = useState(0)
+  const [customSpeechText, setCustomSpeechText] = useState(null)
+
+  const totalSessions = items.length
+  const totalCalories = items.reduce((a,i)=>a+Number(i.calories||0),0)
+  const powerLevel = Math.min(totalSessions * 10, 1000)
+
+  const newFormIdx = useMemo(() =>
+    GOKU_FORMS.reduce((acc, f, i) => totalSessions >= f.threshold ? i : acc, 0),
+    [totalSessions]
+  )
+  const form = GOKU_FORMS[formIdx]
+
+  const activeSessionRef = useRef(null)
+  const prevCompletedCountRef = useRef(0)
+  const prevExerciseIdxRef = useRef(-1)
+
+  const playAudio = useCallback((filename, onEndedCallback = null) => {
+    if (typeof window === 'undefined' || !speechEnabled) return;
+    try {
+      if (window.speechSynthesis) window.speechSynthesis.cancel()
+      const audio = new Audio(`/goku/${filename}`)
+      audio.volume = 0.9
+      setIsSpeaking(true)
+      audio.onended = () => {
+        setIsSpeaking(false)
+        if (onEndedCallback) onEndedCallback()
+      }
+      audio.onerror = () => {
+        setIsSpeaking(false)
+        if (onEndedCallback) onEndedCallback()
+      }
+      audio.play().catch(e => {
+        console.error("Failed to play audio clip:", e)
+        setIsSpeaking(false)
+        if (onEndedCallback) onEndedCallback()
+      })
+    } catch(e) {
+      console.error(e)
+      setIsSpeaking(false)
+      if (onEndedCallback) onEndedCallback()
     }
-    setEditingId(null)
-    setForm({ name: '', sets: 3, reps: 10, weight: 0, duration: 0, calories: 0, date: todayISO(), notes: '' })
-    load(); refresh()
+  }, [speechEnabled])
+
+  const speak = useCallback(async (text) => {
+    if (typeof window === 'undefined' || !speechEnabled) return;
+    try {
+      setIsSpeaking(true)
+      const res = await fetch('/api/goku/speak', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text, voice: 'onyx' }),
+      })
+      if (!res.ok) throw new Error("TTS failed")
+      
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audio.volume = 0.95
+      
+      audio.onended = () => {
+        setIsSpeaking(false)
+        URL.revokeObjectURL(url)
+      }
+      audio.onerror = () => {
+        setIsSpeaking(false)
+        URL.revokeObjectURL(url)
+      }
+      await audio.play()
+    } catch(e) {
+      console.error("OpenAI TTS error, falling back to local synthesis:", e)
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel()
+        const utterance = new SpeechSynthesisUtterance(text)
+        utterance.pitch = 0.95
+        utterance.rate = 1.05
+        const voices = window.speechSynthesis.getVoices()
+        const maleVoice = voices.find(v => v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('google') && v.lang.startsWith('en'))
+        if (maleVoice) utterance.voice = maleVoice
+
+        utterance.onstart = () => setIsSpeaking(true)
+        utterance.onend = () => setIsSpeaking(false)
+        utterance.onerror = () => setIsSpeaking(false)
+        window.speechSynthesis.speak(utterance)
+      } else {
+        setIsSpeaking(false)
+      }
+    }
+  }, [speechEnabled])
+
+  const handleToggleVoice = () => {
+    const nextVal = !speechEnabled
+    setSpeechEnabled(nextVal)
+    setShowSpeakTip(false)
+    
+    if (nextVal) {
+      setTimeout(() => {
+        playAudio("goku-charge.mp3")
+      }, 50)
+      toast.success("🔊 Real Goku Sound System Activated!")
+    } else {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel()
+      }
+      setIsSpeaking(false)
+      toast.info("🔇 Goku Voice System Muted")
+    }
   }
 
-  const startEdit = (i) => {
-    setEditingId(i.id)
-    setForm({
-      name: i.name,
-      sets: i.sets,
-      reps: i.reps,
-      weight: i.weight,
-      duration: i.duration,
-      calories: i.calories,
-      date: i.date ? i.date.slice(0, 10) : todayISO(),
-      notes: i.notes || ''
-    })
+  useEffect(() => {
+    if (!speechEnabled) return
+
+    if (activeSession) {
+      const currentCompletedCount = activeSession.exercises?.reduce((acc, ex) => acc + (ex.setsArray?.filter(s => s.completed)?.length || 0), 0) || 0
+      const currentExerciseIdx = activeSession.exercises?.findIndex(ex => ex.setsArray?.some(s => !s.completed)) ?? -1
+      const currentExercise = activeSession.exercises?.[currentExerciseIdx]
+
+      if (!activeSessionRef.current) {
+        playAudio("goku-charge.mp3", () => {
+          speak(`Yo! A new training dungeon has appeared: ${activeSession.routineName}. First up is ${activeSession.exercises[0]?.name || 'the first exercise'}. Push past your limits!`)
+        })
+      }
+      else if (currentCompletedCount > prevCompletedCountRef.current) {
+        const lastExIdx = activeSession.exercises?.findIndex((ex, idx) => {
+          const oldEx = activeSessionRef.current?.exercises?.[idx]
+          const oldDone = oldEx?.setsArray?.filter(s => s.completed)?.length || 0
+          const newDone = ex.setsArray?.filter(s => s.completed)?.length || 0
+          return newDone > oldDone
+        })
+
+        if (lastExIdx !== -1) {
+          const changedEx = activeSession.exercises[lastExIdx]
+          const isExDone = changedEx.setsArray?.every(s => s.completed)
+          
+          if (isExDone) {
+            const nextExIdx = activeSession.exercises?.findIndex((ex, idx) => idx > lastExIdx && ex.setsArray?.some(s => !s.completed))
+            playAudio("teleport.mp3", () => {
+              if (nextExIdx !== -1) {
+                const nextEx = activeSession.exercises[nextExIdx]
+                speak(`Incredible! All sets for ${changedEx.name} are complete! Next up is ${nextEx.name}. Let's go!`)
+              } else {
+                speak(`Awesome! You've cleared every exercise in this dungeon! Hit the Claim Rewards button to lock in your power level!`)
+              }
+            })
+          } else {
+            playAudio("teleport.mp3", () => {
+              const motivations = [
+                "Nice job! That's another set down!",
+                "Keep it up! Your power level is rising!",
+                "No pain, no gain! Let's keep moving!",
+                "Awesome effort! Keep that perfect form!",
+                "Yes! That's how a Saiyan trains!"
+              ]
+              speak(motivations[Math.floor(Math.random() * motivations.length)])
+            })
+          }
+        }
+      }
+
+      activeSessionRef.current = activeSession
+      prevCompletedCountRef.current = currentCompletedCount
+      prevExerciseIdxRef.current = currentExerciseIdx
+    } else {
+      if (activeSessionRef.current) {
+        playAudio("kakarot.mp3", () => {
+          speak("Fantastic work! Dungeon session closed. Hydrate, rest, and let's get ready for the next battle!")
+        })
+      }
+      activeSessionRef.current = null
+      prevCompletedCountRef.current = 0
+      prevExerciseIdxRef.current = -1
+    }
+  }, [activeSession, speechEnabled, playAudio, speak])
+
+  useEffect(() => {
+    if (newFormIdx !== formIdx) {
+      setFormIdx(newFormIdx)
+      setPowerAnim(true)
+      setShowUnlock(GOKU_FORMS[newFormIdx])
+      toast.success(`🔥 GOKU POWERED UP! ${GOKU_FORMS[newFormIdx].name} UNLOCKED!`)
+      
+      if (speechEnabled) {
+        if (newFormIdx === 4) {
+          playAudio("ultra-instinct.mp3", () => {
+            speak(`I have achieved Ultra Instinct. My limits are completely gone!`)
+          })
+        } else {
+          playAudio("kamehameha.mp3", () => {
+            speak(`Awesome power! I have transformed into ${GOKU_FORMS[newFormIdx].name}! Let's push further beyond!`)
+          })
+        }
+      }
+
+      const t = setTimeout(() => { setPowerAnim(false); setShowUnlock(null) }, 4000)
+      return () => clearTimeout(t)
+    }
+  }, [newFormIdx])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setQuoteIdx(i => {
+        const next = (i + 1) % form.quotes.length
+        if (speechEnabled && activeSession && Math.random() > 0.4) {
+          speak(form.quotes[next])
+        }
+        return next
+      })
+    }, activeSession ? 7000 : 15000)
+    return () => clearInterval(interval)
+  }, [form, activeSession, speechEnabled, speak])
+
+  const nextForm = formIdx < GOKU_FORMS.length - 1 ? GOKU_FORMS[formIdx + 1] : null
+  const progressToNext = nextForm
+    ? Math.min(100, ((totalSessions - form.threshold) / Math.max(nextForm.threshold - form.threshold, 1)) * 100)
+    : 100
+
+  const handleAskAdvice = () => {
+    if (activeSession) {
+      const currentExerciseIdx = activeSession.exercises?.findIndex(ex => ex.setsArray?.some(s => !s.completed)) ?? -1
+      const currentExercise = activeSession.exercises?.[currentExerciseIdx]
+      if (currentExercise) {
+        const advice = getGokuAdvice(currentExercise.name, currentExercise.muscleGroup)
+        playAudio("teleport.mp3", () => {
+          setCustomSpeechText(`Goku Advice: ${advice}`)
+          speak(`Listen up! For ${currentExercise.name}: ${advice}`)
+        })
+        toast.info(`💬 Goku's advice: ${currentExercise.name}`)
+      } else {
+        speak("All exercises in this dungeon are clear! Hit the Claim Rewards button!")
+      }
+    } else {
+      playAudio("teleport.mp3", () => {
+        const fallbackMsg = "To get specific exercise advice, start a dungeon workout session first! For now, focus on your form, breathe regularly, and keep pushing your limits!"
+        setCustomSpeechText(fallbackMsg)
+        speak(fallbackMsg)
+      })
+    }
   }
 
-  const del = async (id) => {
-    await api.del(`exercises/${id}`)
-    toast.success('Workout deleted')
-    load(); refresh()
+  const handleMotivate = () => {
+    const clips = ["its-over-9000.mp3", "kamehameha.mp3", "kakarot.mp3"]
+    const randomClip = clips[Math.floor(Math.random() * clips.length)]
+    playAudio(randomClip)
+    setCustomSpeechText(null)
+    toast.success("🔥 Goku is cheering you on!")
   }
 
-  const byDay = useMemo(() => {
-    const m = {}; items.forEach(i => { m[i.date] = (m[i.date] || 0) + Number(i.calories || 0) })
-    return Object.entries(m).map(([date, calories]) => ({ date, label: fmtDate(date), calories })).slice(-14)
-  }, [items])
+  const handleSpeechCycle = () => {
+    const text = GOKU_SPEECHES[speechIdx]
+    setCustomSpeechText(text)
+    speak(text)
+    setSpeechIdx(prev => (prev + 1) % GOKU_SPEECHES.length)
+    toast.success("🎙️ Playing Goku Motivation Speech!")
+  }
 
   return (
-    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
-      <SectionHeader title="Exercise" desc="Track workouts, sets, reps & calories burned." />
+    <div className="rounded-3xl overflow-hidden relative" style={{
+      background: form.bgGrad,
+      border: `1px solid ${form.border}`,
+      boxShadow: `0 0 60px ${form.glowColor}, 0 0 120px ${form.glowColor}`,
+      transition: 'all 1.5s ease'
+    }}>
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes gokuTalk {
+          0% { transform: scale(1.03) translateY(0); filter: drop-shadow(0 0 20px ${form.auraColor}); }
+          50% { transform: scale(1.08) translateY(-4px) rotate(1deg); filter: drop-shadow(0 0 35px ${form.auraColor}); }
+          100% { transform: scale(1.03) translateY(0); filter: drop-shadow(0 0 20px ${form.auraColor}); }
+        }
+        .goku-speaking {
+          animation: gokuTalk 0.4s infinite ease-in-out;
+        }
+      `}} />
 
-      <motion.div variants={fadeUp} className="glass-card rounded-2xl p-5">
-        <h3 className="text-sm font-bold text-white/80 mb-4 flex items-center gap-2">
-          <Dumbbell className="w-4 h-4 text-violet-400" /> {editingId ? 'Edit Workout' : 'Log Workout'}
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Field label="Workout"><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Bench Press" /></Field>
-          <Field label="Sets"><Input type="number" value={form.sets} onChange={e => setForm({ ...form, sets: e.target.value })} /></Field>
-          <Field label="Reps"><Input type="number" value={form.reps} onChange={e => setForm({ ...form, reps: e.target.value })} /></Field>
-          <Field label="Weight (kg)"><Input type="number" value={form.weight} onChange={e => setForm({ ...form, weight: e.target.value })} /></Field>
-          <Field label="Duration (min)"><Input type="number" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></Field>
-          <Field label="Calories"><Input type="number" value={form.calories} onChange={e => setForm({ ...form, calories: e.target.value })} /></Field>
-          <Field label="Date"><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
-          <Field label="Notes"><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></Field>
-        </div>
-        <div className="mt-4 flex gap-2">
-          <GlowButton onClick={submit}>
-            {editingId ? 'Update Workout' : <><Plus className="w-4 h-4" /> Save</>}
-          </GlowButton>
-          {editingId && (
-            <GlowButton variant="ghost" onClick={() => {
-              setEditingId(null)
-              setForm({ name: '', sets: 3, reps: 10, weight: 0, duration: 0, calories: 0, date: todayISO(), notes: '' })
-            }}>
-              Cancel
-            </GlowButton>
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute inset-0 animate-pulse" style={{ background: `radial-gradient(ellipse 60% 80% at 28% 50%, ${form.aura} 0%, transparent 70%)`, animationDuration:'3s' }} />
+        {formIdx === 4 && <div className="absolute inset-0 opacity-10" style={{ backgroundImage:'linear-gradient(rgba(255,255,255,0.2) 1px, transparent 1px)', backgroundSize:'100% 4px' }} />}
+      </div>
+
+      {showUnlock && (
+        <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none" style={{ background:'rgba(0,0,0,0.75)', backdropFilter:'blur(8px)' }}>
+          <div className="text-center">
+            <div className="text-6xl mb-3 animate-bounce">💥</div>
+            <div className="text-2xl font-black text-white uppercase tracking-widest">POWER UP!</div>
+            <div className="text-lg font-black mt-1" style={{ color: showUnlock.auraColor }}>{showUnlock.name} UNLOCKED</div>
+            <div className="text-xs text-white/40 mt-2 uppercase tracking-widest">{totalSessions} sessions completed</div>
+          </div>
+        </motion.div>
+      )}
+
+      {powerAnim && <div className="absolute inset-0 pointer-events-none animate-pulse z-20" style={{ background:`radial-gradient(ellipse at 30% 50%, ${form.aura} 0%, transparent 60%)` }} />}
+
+      <div className="relative flex flex-col md:flex-row items-stretch">
+        <div className="relative md:w-60 shrink-0 flex items-end justify-center overflow-hidden" style={{ minHeight:'260px' }}>
+          {formIdx >= 1 && [...Array(3)].map((_,i) => (
+            <div key={i} className="absolute rounded-full animate-ping" style={{
+              width:`${80+i*40}px`, height:`${80+i*40}px`,
+              bottom:`${8+i*5}%`, left:'50%', transform:'translateX(-50%)',
+              border:`1px solid ${form.auraColor}${['40','20','0c'][i]}`,
+              animationDuration:`${1.5+i*0.8}s`, animationDelay:`${i*0.3}s`
+            }} />
+          ))}
+          <div className="absolute bottom-0 left-0 right-0 h-24 pointer-events-none" style={{ background:`radial-gradient(ellipse 80% 40% at 50% 100%, ${form.aura} 0%, transparent 70%)` }} />
+          
+          <img src={form.img} alt={`Goku ${form.name}`} 
+            className={`relative z-10 object-contain transition-all duration-1000 ${isSpeaking ? 'goku-speaking' : ''}`}
+            style={{ height:'240px', width:'auto', maxWidth:'100%',
+              filter: formIdx >= 1 ? `drop-shadow(0 0 18px ${form.auraColor}) drop-shadow(0 0 36px ${form.aura})` : 'none',
+              transform: activeSession ? 'scale(1.06)' : 'scale(1)' }} />
+          
+          {activeSession && (
+            <div className="absolute bottom-3 left-0 right-0 flex justify-center z-20">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full animate-bounce" style={{ background:'rgba(0,0,0,0.65)', backdropFilter:'blur(10px)', border:`1px solid ${form.auraColor}77` }}>
+                <div className="w-2.5 h-2.5 rounded-full animate-ping" style={{ background:form.auraColor }} />
+                <span className="text-[9px] font-black uppercase tracking-widest" style={{ color:form.auraColor }}>LIVE TRAINING</span>
+              </div>
+            </div>
           )}
         </div>
-      </motion.div>
 
-      <motion.div variants={stagger} className="grid lg:grid-cols-2 gap-4">
-        <motion.div variants={fadeUp} className="glass-card rounded-2xl p-5">
-          <h3 className="text-sm font-bold text-white/80 mb-4">Calories Burned (14d)</h3>
-          {byDay.length === 0 ? <div className="h-48 flex items-center justify-center text-white/25 text-sm">No workouts yet</div> :
-            <ResponsiveContainer width="100%" height={220}>
-              <RBarChart data={byDay}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" fontSize={10} />
-                <YAxis stroke="rgba(255,255,255,0.2)" fontSize={10} />
-                <Tooltip contentStyle={TT_STYLE} />
-                <Bar dataKey="calories" fill="#f472b6" radius={[6, 6, 0, 0]} />
-              </RBarChart>
-            </ResponsiveContainer>}
-        </motion.div>
-        <motion.div variants={fadeUp} className="glass-card rounded-2xl p-5">
-          <h3 className="text-sm font-bold text-white/80 mb-3">Recent Workouts</h3>
-          {items.length === 0 ? <div className="h-48 flex items-center justify-center text-white/25 text-sm">No workouts logged</div> :
-            <ScrollArea className="h-52">
-              <ul className="space-y-2 pr-2">
-                {items.slice(0, 12).map(i => (
-                  <li key={i.id} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0 group">
-                    <div>
-                      <p className="text-sm font-medium text-white">{i.name}</p>
-                      <p className="text-xs text-white/30">{i.sets}×{i.reps} · {i.weight}kg · {fmtDate(i.date)}</p>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      {i.duration > 0 && <span className="text-violet-400">{i.duration}min</span>}
-                      {i.calories > 0 && <span className="text-pink-400 mr-2">{i.calories}cal</span>}
-                      <button onClick={() => startEdit(i)} className="opacity-0 group-hover:opacity-100 p-1 rounded text-cyan-400 hover:bg-cyan-400/10 transition-all edit-btn">
-                        <NotebookPen className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => del(i.id)} className="opacity-0 group-hover:opacity-100 p-1 rounded text-red-400 hover:bg-red-400/10 transition-all delete-btn">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </ScrollArea>}
-        </motion.div>
-      </motion.div>
-    </motion.div>
+        <div className="flex-1 p-5 flex flex-col justify-between gap-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full" style={{ background:`${form.auraColor}22`, color:form.auraColor, border:`1px solid ${form.auraColor}44` }}>{form.badge}</span>
+                {activeSession && <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full animate-pulse" style={{ background:'rgba(239,68,68,0.15)', color:'#f87171', border:'1px solid rgba(239,68,68,0.3)' }}>⚡ LIVE SESSION</span>}
+                {isSpeaking && <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full animate-pulse bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">🗣 SPEAKING</span>}
+              </div>
+              <h2 className="text-xl font-black text-white" style={{ textShadow:`0 0 20px ${form.auraColor}66` }}>Son Goku</h2>
+              <p className="text-xs font-bold mt-0.5" style={{ color:'rgba(255,255,255,0.35)' }}>{form.name} · {form.xpLabel}</p>
+            </div>
+            
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <button 
+                onClick={handleToggleVoice}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${speechEnabled ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:scale-105' : 'bg-white/5 text-white/50 border-white/10 hover:bg-white/10 hover:text-white'}`}
+                style={{ border: '1px solid' }}
+              >
+                {speechEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                {speechEnabled ? "Voice: ON" : "Voice: MUTED"}
+              </button>
+              {showSpeakTip && (
+                <span className="text-[8px] font-bold text-cyan-400 uppercase tracking-widest animate-pulse mt-0.5">
+                  ⚡ Click to unmute Goku!
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl px-4 py-3 relative overflow-hidden flex-1 flex items-center min-h-[56px]" style={{ background:`${form.auraColor}08`, border:`1px solid ${form.auraColor}20` }}>
+            <div className="absolute top-1 left-2 text-3xl font-black leading-none opacity-10" style={{ color:form.auraColor }}>"</div>
+            <motion.p key={customSpeechText || `${formIdx}-${quoteIdx}`} initial={{ opacity:0, y:6 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.5 }}
+              className="relative z-10 text-sm font-bold text-white/90 leading-relaxed">
+              {customSpeechText || form.quotes[quoteIdx]}
+            </motion.p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 mt-1">
+            <button 
+              onClick={handleAskAdvice}
+              className="flex items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/80 transition-all hover:bg-white/10 active:scale-95 border"
+              style={{ background: 'rgba(255,255,255,0.03)', borderColor: `${form.auraColor}25` }}
+            >
+              💬 Advice
+            </button>
+            <button 
+              onClick={handleSpeechCycle}
+              className="flex items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-white transition-all hover:scale-105 active:scale-95 border bg-white/5"
+              style={{ borderColor: `${form.auraColor}35` }}
+            >
+              🎙️ Speech
+            </button>
+            <button 
+              onClick={handleMotivate}
+              className="flex items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-black transition-all hover:scale-105 active:scale-95"
+              style={{ background: `linear-gradient(135deg, ${form.auraColor}, ${nextForm?.auraColor || form.auraColor})` }}
+            >
+              🔥 Yell!
+            </button>
+          </div>
+
+          {nextForm && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[9px] font-black uppercase tracking-widest" style={{ color:'rgba(255,255,255,0.3)' }}>Next: {nextForm.name}</span>
+                <span className="text-[9px] font-black" style={{ color:form.auraColor }}>{totalSessions}/{nextForm.threshold} sessions</span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background:'rgba(255,255,255,0.05)' }}>
+                <div className="h-full rounded-full transition-all duration-1000 relative overflow-hidden" style={{ width:`${progressToNext}%`, background:`linear-gradient(90deg, ${form.auraColor}, ${nextForm.auraColor})` }}>
+                  <div className="absolute inset-0 animate-pulse" style={{ background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent)' }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-4 gap-2">
+            {[['Sessions',totalSessions,'🏋️'],['Calories',totalCalories.toLocaleString(),'🔥'],['Total Sets',items.reduce((a,i)=>a+Number(i.sets||0),0),'⚡'],['Power',`${powerLevel}/1K`,'💥']].map(([l,v,icon])=>(
+              <div key={l} className="rounded-xl px-2 py-2 text-center" style={{ background:'rgba(0,0,0,0.3)', border:`1px solid ${form.auraColor}15` }}>
+                <div className="text-lg mb-0.5">{icon}</div>
+                <div className="text-sm font-black text-white">{v}</div>
+                <div className="text-[8px] font-bold uppercase tracking-wider mt-0.5" style={{ color:'rgba(255,255,255,0.3)' }}>{l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="hidden lg:flex flex-col justify-center gap-1.5 px-3 py-5 border-l" style={{ borderColor:`${form.auraColor}12`, background:'rgba(0,0,0,0.25)' }}>
+          {GOKU_FORMS.map((f, i) => {
+            const unlocked = totalSessions >= f.threshold
+            const isActive = i === formIdx
+            return (
+              <div key={f.id} className="flex flex-col items-center gap-1">
+                <div className="w-9 h-9 rounded-xl overflow-hidden transition-all duration-300 relative" style={{ opacity:unlocked?1:0.2, border:isActive?`2px solid ${f.auraColor}`:'1px solid rgba(255,255,255,0.06)', boxShadow:isActive?`0 0 12px ${f.auraColor}66`:'none', transform:isActive?'scale(1.12)':'scale(1)' }}>
+                  <img src={f.img} alt={f.name} className="w-full h-full object-cover" style={{ objectPosition:'50% 10%' }} />
+                  {!unlocked && <div className="absolute inset-0 flex items-center justify-center text-xs">🔒</div>}
+                </div>
+                {i < GOKU_FORMS.length-1 && <div className="w-px h-3" style={{ background:unlocked?`${f.auraColor}50`:'rgba(255,255,255,0.06)' }} />}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
   )
 }
 
+// ══════════════════════════════════════════════════════════
+// EXERCISE
+// ══════════════════════════════════════════════════════════
+// EXERCISE - KINESIS MIGHT ELITE STUDIO
+// ══════════════════════════════════════════════════════════
+function Exercise({ refresh }) {
+  const [items, setItems] = useState([])
+  const [stats, setStats] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, duration: 0, calories: 0, date: todayISO(), notes: '' })
+  const [showAiModal, setShowAiModal] = useState(false)
+  const [aiGoal, setAiGoal] = useState('Hypertrophy')
+  const [aiSplit, setAiSplit] = useState('Full Body')
+  const [aiLevel, setAiLevel] = useState('intermediate')
+  const [aiInclude, setAiInclude] = useState('')
+  const [aiExclude, setAiExclude] = useState('')
+  const [aiDuration, setAiDuration] = useState('60')
+  const [aiIntensity, setAiIntensity] = useState('Medium')
+  const [generating, setGenerating] = useState(false)
+  const [generatedWorkout, setGeneratedWorkout] = useState(null)
+  const [selectedMuscle, setSelectedMuscle] = useState(null)
+  const [hoveredMuscle, setHoveredMuscle] = useState(null)
+  const [activeSession, setActiveSession] = useState(null)
+  const [bodyView, setBodyView] = useState('front')
+
+  const load = () => {
+    api.get('exercises').then(setItems)
+    api.get('stats').then(setStats).catch(() => {})
+  }
+  useEffect(() => { load() }, [])
+
+  const submit = async () => {
+    if (!form.name) return toast.error('Exercise name required')
+    if (editingId) { await api.patch(`exercises/${editingId}`, form); toast.success('Updated ✓') }
+    else { await api.post('exercises', form); toast.success('Logged ✓') }
+    setEditingId(null)
+    setForm({ name: '', sets: 3, reps: 10, weight: 0, duration: 0, calories: 0, date: todayISO(), notes: '' })
+    load(); if (refresh) refresh()
+  }
+  const startEdit = (i) => {
+    setEditingId(i.id)
+    setForm({ name: i.name, sets: i.sets, reps: i.reps, weight: i.weight, duration: i.duration, calories: i.calories, date: i.date?.slice(0,10) || todayISO(), notes: i.notes || '' })
+  }
+  const del = async (id) => { await api.del(`exercises/${id}`); toast.success('Deleted'); load(); if (refresh) refresh() }
+
+  const fatigue = stats?.gameStats?.muscleFatigue || { chest: 0, back: 0, shoulders: 0, legs: 0, arms: 0, core: 0 }
+
+  // Muscle group data
+  const MUSCLES = {
+    chest:     { label: 'Pectorals',   color: '#06b6d4', glow: 'rgba(6,182,212,0.6)',   exercises: ['Bench Press','Incline DB Press','Cable Crossover','Chest Dips','Push-Ups','Pec Deck Fly'] },
+    back:      { label: 'Latissimus',  color: '#8b5cf6', glow: 'rgba(139,92,246,0.6)',  exercises: ['Deadlift','Pull-Ups','Barbell Row','Lat Pulldown','Seated Cable Row','Face Pull'] },
+    shoulders: { label: 'Deltoids',    color: '#f59e0b', glow: 'rgba(245,158,11,0.6)',  exercises: ['Overhead Press','Arnold Press','Lateral Raise','Front Raise','Rear Delt Fly','Upright Row'] },
+    legs:      { label: 'Quadriceps',  color: '#10b981', glow: 'rgba(16,185,129,0.6)',  exercises: ['Barbell Squat','Leg Press','Romanian Deadlift','Leg Extension','Leg Curl','Calf Raise'] },
+    arms:      { label: 'Biceps/Tris', color: '#ec4899', glow: 'rgba(236,72,153,0.6)',  exercises: ['Barbell Curl','Hammer Curl','Preacher Curl','Tricep Pushdown','Skull Crusher','Dips'] },
+    core:      { label: 'Abdominals',  color: '#f97316', glow: 'rgba(249,115,22,0.6)',  exercises: ['Plank','Ab Wheel','Hanging Leg Raise','Cable Crunch','Russian Twist','Dragon Flag'] },
+  }
+
+  const getMuscleFill = (id) => {
+    if (selectedMuscle === id) return MUSCLES[id]?.color + 'cc'
+    if (hoveredMuscle === id) return MUSCLES[id]?.color + '66'
+    const f = fatigue[id] || 0
+    if (f > 70) return 'rgba(239,68,68,0.25)'
+    if (f > 40) return 'rgba(245,158,11,0.15)'
+    return 'rgba(255,255,255,0.04)'
+  }
+  const getMuscleStroke = (id) => {
+    if (selectedMuscle === id) return MUSCLES[id]?.color
+    if (hoveredMuscle === id) return MUSCLES[id]?.color + 'aa'
+    const f = fatigue[id] || 0
+    if (f > 70) return 'rgba(239,68,68,0.6)'
+    return 'rgba(255,255,255,0.12)'
+  }
+
+  const muscleProps = (id) => ({
+    fill: getMuscleFill(id),
+    stroke: getMuscleStroke(id),
+    strokeWidth: selectedMuscle === id ? 1.5 : 0.8,
+    style: { cursor: 'pointer', transition: 'all 0.2s', filter: selectedMuscle === id ? `drop-shadow(0 0 8px ${MUSCLES[id]?.glow})` : 'none' },
+    onMouseEnter: () => setHoveredMuscle(id),
+    onMouseLeave: () => setHoveredMuscle(null),
+    onClick: () => setSelectedMuscle(prev => prev === id ? null : id),
+  })
+
+  const handleGenerateWorkout = async () => {
+    setGenerating(true); setGeneratedWorkout(null)
+    try {
+      const res = await api.post('ai/generate-workout', { goal: aiGoal, split: aiSplit, level: aiLevel, includeExercises: aiInclude, excludeExercises: aiExclude, duration: aiDuration, intensity: aiIntensity })
+      if (res?.success && res.workout) {
+        setGeneratedWorkout({ ...res.workout, exercises: (res.workout.exercises || []).map(ex => ({ ...ex, setsArray: Array.from({ length: Number(ex.sets || 3) }, () => ({ completed: false, reps: Number(ex.reps || 10), weight: 0 })) })) })
+        toast.success('Program forged by the AI!')
+      } else toast.error('Generation failed — check API key.')
+    } catch(e) { toast.error(e.message) } finally { setGenerating(false) }
+  }
+
+  const startSession = (w) => {
+    setActiveSession({ ...w, exercises: w.exercises.map(ex => ({ ...ex, setsArray: ex.setsArray || Array.from({ length: ex.sets||3 }, () => ({ completed:false, reps: ex.reps||10, weight:0 })) })) })
+    setShowAiModal(false); setGeneratedWorkout(null)
+    toast.success('⚔️ Dungeon activated — begin your quest!')
+  }
+
+  const toggleSet = (ei, si) => setActiveSession(prev => {
+    const u = { ...prev, exercises: prev.exercises.map((ex,i) => i !== ei ? ex : { ...ex, setsArray: ex.setsArray.map((s,j) => j !== si ? s : { ...s, completed: !s.completed }) }) }
+    if (!prev.exercises[ei].setsArray[si].completed) toast.info(`⚡ ${prev.exercises[ei].name} · Set ${si+1} cleared!`)
+    return u
+  })
+  const addSet = (ei) => setActiveSession(prev => {
+    const ex = prev.exercises[ei]; const last = ex.setsArray[ex.setsArray.length-1]
+    return { ...prev, exercises: prev.exercises.map((e,i) => i !== ei ? e : { ...e, setsArray: [...e.setsArray, { completed:false, reps: last?.reps||10, weight: last?.weight||0 }] }) }
+  })
+  const updateSet = (ei, si, field, val) => setActiveSession(prev => ({
+    ...prev, exercises: prev.exercises.map((ex,i) => i!==ei ? ex : { ...ex, setsArray: ex.setsArray.map((s,j) => j!==si ? s : { ...s, [field]: Number(val)||0 }) })
+  }))
+
+  const completeSession = async () => {
+    if (!activeSession) return
+    let count = 0
+    for (const ex of activeSession.exercises) {
+      const done = ex.setsArray.filter(s => s.completed)
+      if (!done.length) continue
+      await api.post('exercises', { name: ex.name, sets: done.length, reps: Math.round(done.reduce((a,s)=>a+s.reps,0)/done.length), weight: Math.max(...done.map(s=>s.weight)), duration: 10, calories: done.length * 25, date: todayISO(), notes: `Dungeon Quest · AI: ${ex.sets}×${ex.reps}` })
+      count++
+    }
+    if (!count) { toast.warning('No completed sets found.'); return }
+    toast.success(`🏆 DUNGEON CLEAR! ${count} exercises saved. XP awarded!`)
+    setActiveSession(null); load(); if (refresh) refresh()
+  }
+
+  const byDay = useMemo(() => {
+    const m = {}; items.forEach(i => { m[i.date] = (m[i.date]||0) + Number(i.calories||0) })
+    return Object.entries(m).map(([date,calories]) => ({ date, label: fmtDate(date), calories })).slice(-14)
+  }, [items])
+
+  const weeklyVol = useMemo(() => {
+    const last7 = [...Array(7)].map((_,i) => { const d=new Date(); d.setDate(d.getDate()-(6-i)); return d.toISOString().slice(0,10) })
+    return last7.map(date => ({ label: new Date(date).toLocaleDateString('en',{weekday:'short'}), sets: items.filter(i=>i.date===date).reduce((a,i)=>a+Number(i.sets||0),0) }))
+  }, [items])
+
+  return (
+    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-0">
+      {/* ═══ HERO HEADER ═══ */}
+      <div className="relative overflow-hidden rounded-3xl mb-6" style={{ background: 'linear-gradient(135deg, #0a0a0f 0%, #0d1117 40%, #0f0a1a 100%)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 80% 60% at 50% -20%, rgba(6,182,212,0.12) 0%, transparent 70%)' }} />
+        <div className="absolute top-0 right-0 w-64 h-64 pointer-events-none" style={{ background: 'radial-gradient(circle at 100% 0%, rgba(139,92,246,0.08) 0%, transparent 60%)' }} />
+        
+        <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-6 pb-5">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-2 h-8 rounded-full" style={{ background: 'linear-gradient(180deg, #06b6d4, #8b5cf6)' }} />
+              <div>
+                <h1 className="text-2xl font-black text-white tracking-tight" style={{ letterSpacing: '-0.02em' }}>KINESIS MIGHT</h1>
+                <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mt-0.5">Elite Training Studio</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 ml-5 mt-3">
+              {[['Total Sessions', items.length], ['This Week', items.filter(i=>{const d=new Date();d.setDate(d.getDate()-7);return new Date(i.date)>=d}).length], ['Calories (30d)', items.slice(-30).reduce((a,i)=>a+Number(i.calories||0),0)]].map(([l,v])=>(
+                <div key={l}>
+                  <div className="text-xl font-black text-white">{v.toLocaleString()}</div>
+                  <div className="text-[10px] text-white/30 uppercase tracking-wider font-bold">{l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            {activeSession && (
+              <button onClick={()=>{if(confirm('Abort quest?')){setActiveSession(null);toast.error('Quest aborted.')}}}
+                className="px-4 py-2.5 text-xs font-black uppercase tracking-widest border rounded-xl transition-all"
+                style={{ background:'rgba(239,68,68,0.1)', borderColor:'rgba(239,68,68,0.3)', color:'#f87171' }}>
+                Abort Quest
+              </button>
+            )}
+            <button onClick={()=>setShowAiModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 font-black text-sm uppercase tracking-wider rounded-xl text-white transition-all hover:scale-105 active:scale-95"
+              style={{ background:'linear-gradient(135deg, #06b6d4, #8b5cf6)', boxShadow:'0 0 30px rgba(6,182,212,0.3)' }}>
+              <Sparkles className="w-4 h-4" />
+              AI Wizard
+            </button>
+          </div>
+        </div>
+
+        {/* Fatigue strip */}
+        <div className="flex border-t border-white/5 divide-x divide-white/5">
+          {Object.entries(fatigue).map(([muscle, pct]) => {
+            const m = MUSCLES[muscle]; const isFat = pct>70; const isMed = pct>40
+            return (
+              <div key={muscle} className="flex-1 px-3 py-2.5 text-center" style={{ cursor:'pointer' }} onClick={()=>setSelectedMuscle(muscle)}>
+                <div className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: isFat?'#ef4444': isMed?'#f59e0b': m?.color || '#fff', opacity: 0.7 }}>{muscle}</div>
+                <div className="h-1 rounded-full overflow-hidden" style={{ background:'rgba(255,255,255,0.05)' }}>
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width:`${pct}%`, background: isFat?'linear-gradient(90deg,#ef4444,#ec4899)': isMed?'#f59e0b': m?.color||'#06b6d4' }} />
+                </div>
+                <div className="text-[9px] font-black mt-0.5" style={{ color: isFat?'#f87171':isMed?'#fbbf24':'rgba(255,255,255,0.3)' }}>{pct}%</div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ═══ ACTIVE DUNGEON SESSION ═══ */}
+      {activeSession && (
+        <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} className="mb-6 rounded-3xl overflow-hidden" style={{ background:'linear-gradient(135deg, #030712 0%, #0a0f1e 100%)', border:'1px solid rgba(6,182,212,0.3)', boxShadow:'0 0 60px rgba(6,182,212,0.08), inset 0 1px 0 rgba(6,182,212,0.1)' }}>
+          {/* Session Header */}
+          <div className="relative px-6 py-5 border-b" style={{ borderColor:'rgba(6,182,212,0.15)', background:'linear-gradient(135deg, rgba(6,182,212,0.08) 0%, rgba(139,92,246,0.05) 100%)' }}>
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+              {[...Array(3)].map((_,i) => <div key={i} className="absolute h-px w-full opacity-20 animate-pulse" style={{ top:`${30*(i+1)}%`, background:`linear-gradient(90deg, transparent, rgba(6,182,212,${0.3-i*0.1}), transparent)`, animationDelay:`${i*0.7}s` }} />)}
+            </div>
+            <div className="relative flex items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-2.5 h-2.5 rounded-full animate-ping inline-block" style={{ background:'#06b6d4' }} />
+                  <span className="text-xs font-black uppercase tracking-widest" style={{ color:'#67e8f9' }}>⚔ DUNGEON RUN ACTIVE</span>
+                </div>
+                <h2 className="text-lg font-black text-white">{activeSession.routineName}</h2>
+                <p className="text-xs font-medium mt-0.5" style={{ color:'rgba(255,255,255,0.4)' }}>{activeSession.focus}</p>
+              </div>
+              <button onClick={completeSession}
+                className="flex items-center gap-2 px-6 py-3 font-black text-xs uppercase tracking-widest text-black rounded-xl transition-all hover:scale-105 active:scale-95 shrink-0"
+                style={{ background:'linear-gradient(135deg, #06b6d4, #0ea5e9)', boxShadow:'0 0 25px rgba(6,182,212,0.4)' }}>
+                <Zap className="w-4 h-4" />
+                Claim Rewards
+              </button>
+            </div>
+          </div>
+
+          {/* Exercise Cards */}
+          <div className="p-5 grid md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[65vh] overflow-y-auto">
+            {activeSession.exercises.map((ex, ei) => {
+              const completedCount = ex.setsArray.filter(s=>s.completed).length
+              const totalCount = ex.setsArray.length
+              const pct = Math.round((completedCount/totalCount)*100)
+              const muscleColor = Object.entries(MUSCLES).find(([,m])=>ex.muscleGroup?.toLowerCase().includes(Object.values(m).join(',').toLowerCase()))?.[1]?.color || '#06b6d4'
+
+              return (
+                <div key={ei} className="rounded-2xl overflow-hidden" style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(255,255,255,0.06)' }}>
+                  <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: muscleColor }} />
+                        <h4 className="text-sm font-black text-white truncate">{ex.name}</h4>
+                      </div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color:'rgba(255,255,255,0.3)' }}>{ex.muscleGroup} · {ex.weightSuggestion || 'Bodyweight'}</div>
+                    </div>
+                    <button onClick={()=>addSet(ei)} className="shrink-0 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all hover:scale-105" style={{ background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.5)', border:'1px solid rgba(255,255,255,0.08)' }}>
+                      +Set
+                    </button>
+                  </div>
+                  
+                  {/* Progress ring */}
+                  <div className="px-4 pb-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background:'rgba(255,255,255,0.05)' }}>
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width:`${pct}%`, background: pct===100 ? 'linear-gradient(90deg,#06b6d4,#10b981)' : muscleColor }} />
+                      </div>
+                      <span className="text-[10px] font-black shrink-0" style={{ color: pct===100?'#34d399':'rgba(255,255,255,0.4)' }}>{completedCount}/{totalCount}</span>
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      {ex.setsArray.map((set, si) => (
+                        <div key={si} className="flex items-center gap-2 rounded-xl px-3 py-2 transition-all" style={{ background: set.completed ? 'rgba(6,182,212,0.08)' : 'rgba(255,255,255,0.02)', border: `1px solid ${set.completed ? 'rgba(6,182,212,0.25)' : 'rgba(255,255,255,0.04)'}` }}>
+                          <button onClick={()=>toggleSet(ei,si)} className="w-7 h-7 rounded-lg shrink-0 font-black text-xs flex items-center justify-center transition-all hover:scale-110 active:scale-90"
+                            style={{ background: set.completed ? '#06b6d4' : 'rgba(255,255,255,0.05)', color: set.completed ? '#000' : 'rgba(255,255,255,0.4)', boxShadow: set.completed ? '0 0 12px rgba(6,182,212,0.4)' : 'none' }}>
+                            {set.completed ? '✓' : si+1}
+                          </button>
+                          <div className="flex-1 flex items-center gap-2">
+                            <div>
+                              <div className="text-[9px] font-black uppercase tracking-wider mb-0.5" style={{ color:'rgba(255,255,255,0.25)' }}>Reps</div>
+                              <input type="number" value={set.reps} onChange={e=>updateSet(ei,si,'reps',e.target.value)} className="w-12 text-center text-xs font-black rounded-lg bg-transparent border focus:outline-none" style={{ color:'#fff', borderColor:'rgba(255,255,255,0.1)', padding:'2px 0' }} />
+                            </div>
+                            <div className="h-6 w-px" style={{ background:'rgba(255,255,255,0.06)' }} />
+                            <div>
+                              <div className="text-[9px] font-black uppercase tracking-wider mb-0.5" style={{ color:'rgba(255,255,255,0.25)' }}>kg</div>
+                              <input type="number" value={set.weight} onChange={e=>updateSet(ei,si,'weight',e.target.value)} className="w-14 text-center text-xs font-black rounded-lg bg-transparent border focus:outline-none" style={{ color:'#fff', borderColor:'rgba(255,255,255,0.1)', padding:'2px 0' }} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {ex.notes && <div className="px-4 pb-3"><p className="text-[10px] italic" style={{ color:'rgba(139,92,246,0.7)' }}>💡 {ex.notes}</p></div>}
+                </div>
+              )
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* ═══ MAIN STUDIO ═══ */}
+      {!activeSession && (
+        <div className="space-y-5">
+          {/* Row 1: Body Map + Exercise Logger */}
+          <div className="grid lg:grid-cols-5 gap-5">
+            
+            {/* ── ANATOMICAL BODY MAP ── (3 cols) */}
+            <div className="lg:col-span-3 rounded-3xl overflow-hidden" style={{ background:'linear-gradient(135deg, #080c14 0%, #0d0a1a 100%)', border:'1px solid rgba(255,255,255,0.06)', minHeight:'560px' }}>
+              <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor:'rgba(255,255,255,0.05)' }}>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">Anatomical Target Map</h3>
+                  <p className="text-[10px] mt-0.5 font-medium" style={{ color:'rgba(255,255,255,0.3)' }}>Click any muscle group to select exercises</p>
+                </div>
+                <div className="flex gap-1 p-1 rounded-xl" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.06)' }}>
+                  {['front','back'].map(v => (
+                    <button key={v} onClick={()=>setBodyView(v)} className="px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all" style={{ background: bodyView===v ? 'rgba(255,255,255,0.1)' : 'transparent', color: bodyView===v ? '#fff' : 'rgba(255,255,255,0.35)' }}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex">
+                {/* SVG Body */}
+                <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
+                  {/* Holographic grid background */}
+                  <div className="absolute inset-0 pointer-events-none opacity-20" style={{
+                    backgroundImage: 'linear-gradient(rgba(6,182,212,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,0.15) 1px, transparent 1px)',
+                    backgroundSize: '40px 40px'
+                  }} />
+                  
+                  <svg viewBox="0 0 200 480" className="w-full" style={{ maxHeight:'420px', filter:'drop-shadow(0 0 20px rgba(6,182,212,0.05))' }}>
+                    <defs>
+                      <radialGradient id="bodyGrad" cx="50%" cy="30%" r="60%">
+                        <stop offset="0%" stopColor="rgba(255,255,255,0.03)" />
+                        <stop offset="100%" stopColor="rgba(255,255,255,0.01)" />
+                      </radialGradient>
+                    </defs>
+
+                    {bodyView === 'front' ? (
+                      <g>
+                        {/* ── HEAD ── */}
+                        <ellipse cx="100" cy="28" rx="22" ry="26" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.15)" strokeWidth="0.8" />
+                        <ellipse cx="100" cy="35" rx="12" ry="10" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
+                        {/* Neck */}
+                        <path d="M 88 50 Q 100 58 112 50 L 116 68 Q 100 74 84 68 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.1)" strokeWidth="0.6" />
+                        
+                        {/* ── SHOULDERS (Deltoids) ── */}
+                        <path d="M 54 70 Q 40 68 32 82 Q 28 96 36 106 Q 44 115 56 110 L 68 85 Z" {...muscleProps('shoulders')} />
+                        <path d="M 146 70 Q 160 68 168 82 Q 172 96 164 106 Q 156 115 144 110 L 132 85 Z" {...muscleProps('shoulders')} />
+                        
+                        {/* ── CHEST (Pectoralis Major) ── */}
+                        <path d="M 68 72 Q 84 68 100 70 Q 100 70 100 70 Q 116 68 132 72 L 130 108 Q 115 118 100 122 Q 85 118 70 108 Z" {...muscleProps('chest')} />
+                        {/* Chest division line */}
+                        <line x1="100" y1="72" x2="100" y2="120" stroke={selectedMuscle==='chest' ? 'rgba(6,182,212,0.3)' : 'rgba(255,255,255,0.05)'} strokeWidth="0.5" strokeDasharray="2,2" />
+                        
+                        {/* ── ARMS (Biceps) ── */}
+                        <path d="M 36 106 Q 28 118 26 134 Q 24 150 30 162 Q 38 170 48 166 Q 58 158 58 142 L 56 110 Z" {...muscleProps('arms')} />
+                        <path d="M 164 106 Q 172 118 174 134 Q 176 150 170 162 Q 162 170 152 166 Q 142 158 142 142 L 144 110 Z" {...muscleProps('arms')} />
+                        {/* Forearms */}
+                        <path d="M 30 162 Q 24 178 26 196 Q 28 210 38 216 Q 48 218 54 210 Q 58 196 56 178 L 48 166 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+                        <path d="M 170 162 Q 176 178 174 196 Q 172 210 162 216 Q 152 218 146 210 Q 142 196 144 178 L 152 166 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+                        
+                        {/* ── CORE / ABS ── */}
+                        <path d="M 70 122 Q 85 118 100 122 Q 115 118 130 122 L 132 185 Q 115 195 100 198 Q 85 195 68 185 Z" {...muscleProps('core')} />
+                        {/* 6-pack grid lines */}
+                        {[138, 155, 172].map(y => <line key={y} x1="75" y1={y} x2="125" y2={y} stroke={selectedMuscle==='core'?'rgba(249,115,22,0.25)':'rgba(255,255,255,0.04)'} strokeWidth="0.6" />)}
+                        <line x1="100" y1="122" x2="100" y2="195" stroke={selectedMuscle==='core'?'rgba(249,115,22,0.25)':'rgba(255,255,255,0.04)'} strokeWidth="0.6" />
+                        
+                        {/* ── LEGS (Quadriceps) ── */}
+                        <path d="M 68 200 Q 78 196 100 198 Q 100 198 86 198 L 82 260 Q 78 290 72 310 Q 66 330 62 350 Q 58 366 64 380 Q 70 390 82 390 Q 92 388 96 372 L 98 310 L 96 260 L 95 205 Q 83 200 68 200 Z" {...muscleProps('legs')} />
+                        <path d="M 132 200 Q 122 196 100 198 Q 100 198 114 198 L 118 260 Q 122 290 128 310 Q 134 330 138 350 Q 142 366 136 380 Q 130 390 118 390 Q 108 388 104 372 L 102 310 L 104 260 L 105 205 Q 117 200 132 200 Z" {...muscleProps('legs')} />
+                        {/* Calves */}
+                        <path d="M 64 380 Q 68 400 70 420 Q 72 440 76 455 L 90 458 Q 96 440 96 420 L 96 390 Q 88 388 82 390 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+                        <path d="M 136 380 Q 132 400 130 420 Q 128 440 124 455 L 110 458 Q 104 440 104 420 L 104 390 Q 112 388 118 390 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+                        {/* Feet */}
+                        <path d="M 76 455 Q 68 460 64 465 Q 62 470 72 472 L 96 470 Q 100 465 100 458 L 90 458 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+                        <path d="M 124 455 Q 132 460 136 465 Q 138 470 128 472 L 104 470 Q 100 465 100 458 L 110 458 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+                      </g>
+                    ) : (
+                      <g>
+                        {/* HEAD BACK */}
+                        <ellipse cx="100" cy="28" rx="22" ry="26" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.15)" strokeWidth="0.8" />
+                        <ellipse cx="100" cy="24" rx="14" ry="10" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
+                        {/* Neck */}
+                        <path d="M 88 50 Q 100 56 112 50 L 115 68 Q 100 73 85 68 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.1)" strokeWidth="0.6" />
+
+                        {/* ── REAR DELTS / TRAPS ── */}
+                        <path d="M 85 68 Q 100 62 115 68 L 118 82 Q 100 78 82 82 Z" {...muscleProps('shoulders')} />
+                        {/* Side shoulders */}
+                        <path d="M 54 70 Q 40 68 32 82 Q 28 96 36 106 Q 44 115 56 110 L 68 85 Z" {...muscleProps('shoulders')} />
+                        <path d="M 146 70 Q 160 68 168 82 Q 172 96 164 106 Q 156 115 144 110 L 132 85 Z" {...muscleProps('shoulders')} />
+
+                        {/* ── BACK (Lats + Rhomboids) ── */}
+                        {/* Trapezius upper */}
+                        <path d="M 82 82 Q 100 78 118 82 L 130 108 Q 116 118 100 122 Q 84 118 70 108 Z" {...muscleProps('back')} />
+                        {/* Lats */}
+                        <path d="M 70 108 Q 84 118 100 122 L 96 185 Q 80 192 68 185 Q 58 175 56 155 Q 54 138 62 120 Z" {...muscleProps('back')} />
+                        <path d="M 130 108 Q 116 118 100 122 L 104 185 Q 120 192 132 185 Q 142 175 144 155 Q 146 138 138 120 Z" {...muscleProps('back')} />
+                        {/* Spine line */}
+                        <line x1="100" y1="82" x2="100" y2="188" stroke={selectedMuscle==='back'?'rgba(139,92,246,0.3)':'rgba(255,255,255,0.06)'} strokeWidth="0.7" strokeDasharray="3,3" />
+
+                        {/* ── TRICEPS ── */}
+                        <path d="M 36 106 Q 28 118 26 134 Q 24 150 30 162 Q 38 170 48 166 Q 58 158 58 142 L 56 110 Z" {...muscleProps('arms')} />
+                        <path d="M 164 106 Q 172 118 174 134 Q 176 150 170 162 Q 162 170 152 166 Q 142 158 142 142 L 144 110 Z" {...muscleProps('arms')} />
+                        {/* Forearms */}
+                        <path d="M 30 162 Q 24 178 26 196 Q 28 210 38 216 Q 48 218 54 210 Q 58 196 56 178 L 48 166 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+                        <path d="M 170 162 Q 176 178 174 196 Q 172 210 162 216 Q 152 218 146 210 Q 142 196 144 178 L 152 166 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+
+                        {/* ── GLUTES + HAMSTRINGS ── */}
+                        <path d="M 68 188 Q 84 192 100 195 Q 85 195 82 205 L 78 250 Q 76 275 72 300 Q 68 325 64 350 Q 60 370 66 384 Q 72 392 84 390 Q 94 386 96 368 L 97 300 L 95 230 L 93 205 Q 83 200 68 200 Z" {...muscleProps('legs')} />
+                        <path d="M 132 188 Q 116 192 100 195 Q 115 195 118 205 L 122 250 Q 124 275 128 300 Q 132 325 136 350 Q 140 370 134 384 Q 128 392 116 390 Q 106 386 104 368 L 103 300 L 105 230 L 107 205 Q 117 200 132 200 Z" {...muscleProps('legs')} />
+                        {/* Calves back */}
+                        <path d="M 66 384 Q 68 404 70 422 Q 72 442 76 456 L 90 458 Q 96 440 96 420 L 96 390 Q 88 388 84 390 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+                        <path d="M 134 384 Q 132 404 130 422 Q 128 442 124 456 L 110 458 Q 104 440 104 420 L 104 390 Q 112 388 116 390 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+
+                        {/* ── LOWER BACK / CORE ── */}
+                        <path d="M 82 185 Q 100 192 118 185 L 120 205 Q 100 210 80 205 Z" {...muscleProps('core')} />
+
+                        {/* Feet */}
+                        <path d="M 76 456 Q 68 462 63 467 Q 61 472 72 473 L 96 470 Q 100 465 100 458 L 90 458 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+                        <path d="M 124 456 Q 132 462 137 467 Q 139 472 128 473 L 104 470 Q 100 465 100 458 L 110 458 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+                      </g>
+                    )}
+
+                    {/* Holographic scanline overlay */}
+                    <rect x="0" y="0" width="200" height="480" fill="none" stroke="rgba(6,182,212,0.04)" strokeWidth="0.5" />
+                  </svg>
+
+                  {/* Active selection indicator */}
+                  {selectedMuscle && (
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <div className="rounded-2xl px-4 py-3 flex items-center gap-3" style={{ background:'rgba(0,0,0,0.6)', border:`1px solid ${MUSCLES[selectedMuscle]?.color}44`, backdropFilter:'blur(10px)' }}>
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0 animate-pulse" style={{ background: MUSCLES[selectedMuscle]?.color, boxShadow:`0 0 8px ${MUSCLES[selectedMuscle]?.glow}` }} />
+                        <div>
+                          <div className="text-xs font-black text-white">{MUSCLES[selectedMuscle]?.label}</div>
+                          <div className="text-[9px] font-bold uppercase tracking-wider mt-0.5" style={{ color:'rgba(255,255,255,0.4)' }}>CNS Fatigue: {fatigue[selectedMuscle] || 0}%</div>
+                        </div>
+                        <button onClick={()=>setSelectedMuscle(null)} className="ml-auto text-white/20 hover:text-white/60 transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Exercise Suggestions Panel */}
+                {selectedMuscle && (
+                  <motion.div initial={{ opacity:0, x:10 }} animate={{ opacity:1, x:0 }} className="w-48 shrink-0 border-l flex flex-col" style={{ borderColor:'rgba(255,255,255,0.05)', background:'rgba(0,0,0,0.2)' }}>
+                    <div className="px-3 py-3 border-b" style={{ borderColor:'rgba(255,255,255,0.05)' }}>
+                      <div className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: MUSCLES[selectedMuscle]?.color }}>Exercises</div>
+                      <div className="text-xs font-black text-white">{MUSCLES[selectedMuscle]?.label}</div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                      {MUSCLES[selectedMuscle]?.exercises.map(ex => (
+                        <button key={ex} onClick={() => { setForm(f=>({...f, name:ex, sets:3, reps:10})); toast.success(`Selected: ${ex}`) }}
+                          className="w-full text-left px-3 py-2 rounded-xl transition-all text-xs font-bold group"
+                          style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(255,255,255,0.04)', color:'rgba(255,255,255,0.7)' }}
+                          onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.06)'}
+                          onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,0.02)'}>
+                          {ex}
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </div>
+
+            {/* ── EXERCISE LOGGER ── (2 cols) */}
+            <div className="lg:col-span-2 flex flex-col gap-4">
+              {/* Log form */}
+              <div className="rounded-3xl p-5 flex-1" style={{ background:'linear-gradient(135deg, #080c14, #0a0a12)', border:'1px solid rgba(255,255,255,0.06)' }}>
+                <h3 className="text-sm font-black text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <div className="w-1.5 h-5 rounded-full" style={{ background:'linear-gradient(180deg, #06b6d4, #8b5cf6)' }} />
+                  {editingId ? 'Edit Exercise' : 'Log Exercise'}
+                </h3>
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-widest mb-1 block" style={{ color:'rgba(255,255,255,0.35)' }}>Exercise Name</label>
+                    <input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="e.g. Bench Press" className="w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-white placeholder-white/20 focus:outline-none transition-all" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)' }} onFocus={e=>e.target.style.borderColor='rgba(6,182,212,0.4)'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,0.08)'} />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[['Sets','sets'],['Reps','reps'],['kg','weight']].map(([l,k])=>(
+                      <div key={k}>
+                        <label className="text-[9px] font-black uppercase tracking-widest mb-1 block" style={{ color:'rgba(255,255,255,0.35)' }}>{l}</label>
+                        <input type="number" value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})} className="w-full px-2 py-2.5 rounded-xl text-sm font-black text-white text-center focus:outline-none transition-all" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)' }} onFocus={e=>e.target.style.borderColor='rgba(6,182,212,0.4)'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,0.08)'} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[['Duration (min)','duration'],['Calories','calories']].map(([l,k])=>(
+                      <div key={k}>
+                        <label className="text-[9px] font-black uppercase tracking-widest mb-1 block" style={{ color:'rgba(255,255,255,0.35)' }}>{l}</label>
+                        <input type="number" value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})} className="w-full px-3 py-2.5 rounded-xl text-sm font-bold text-white focus:outline-none transition-all" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)' }} onFocus={e=>e.target.style.borderColor='rgba(6,182,212,0.4)'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,0.08)'} />
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-widest mb-1 block" style={{ color:'rgba(255,255,255,0.35)' }}>Date</label>
+                    <input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} className="w-full px-3 py-2.5 rounded-xl text-sm font-bold text-white focus:outline-none transition-all" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', colorScheme:'dark' }} />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-widest mb-1 block" style={{ color:'rgba(255,255,255,0.35)' }}>Notes</label>
+                    <input value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Form cues, tempo, feel..." className="w-full px-3 py-2.5 rounded-xl text-sm font-medium text-white placeholder-white/15 focus:outline-none transition-all" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)' }} onFocus={e=>e.target.style.borderColor='rgba(6,182,212,0.4)'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,0.08)'} />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-4">
+                  <button onClick={submit} className="flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-wider text-white transition-all hover:scale-105 active:scale-95" style={{ background:'linear-gradient(135deg, #06b6d4, #8b5cf6)', boxShadow:'0 0 20px rgba(6,182,212,0.2)' }}>
+                    {editingId ? 'Update' : '+ Log Exercise'}
+                  </button>
+                  {editingId && <button onClick={()=>{setEditingId(null);setForm({name:'',sets:3,reps:10,weight:0,duration:0,calories:0,date:todayISO(),notes:''})}} className="px-4 py-3 rounded-xl font-black text-xs uppercase tracking-wider text-white/40 transition-all hover:text-white/70" style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)' }}>Cancel</button>}
+                </div>
+              </div>
+
+              {/* Weekly Volume Bars */}
+              <div className="rounded-3xl p-5" style={{ background:'linear-gradient(135deg, #080c14, #0a0a12)', border:'1px solid rgba(255,255,255,0.06)' }}>
+                <h3 className="text-xs font-black text-white uppercase tracking-wider mb-4">Weekly Set Volume</h3>
+                <div className="flex items-end gap-1.5 h-20">
+                  {weeklyVol.map(({label,sets},i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <div className="w-full rounded-t-lg transition-all duration-700 relative overflow-hidden" style={{ height:`${Math.max(4, sets ? (sets/Math.max(...weeklyVol.map(d=>d.sets),1))*64 : 4)}px`, background:'linear-gradient(180deg, #06b6d4, #8b5cf6)', opacity: sets ? 1 : 0.2 }}>
+                        {sets > 0 && <div className="absolute inset-0 animate-pulse" style={{ background:'linear-gradient(180deg, rgba(255,255,255,0.2), transparent)' }} />}
+                      </div>
+                      <span className="text-[9px] font-black uppercase" style={{ color:'rgba(255,255,255,0.25)' }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ═══ GOKU POWER COMPANION ═══ */}
+          <GokuCompanion items={items} activeSession={activeSession} />
+
+          {/* Row 2: History + Calories chart */}
+          <div className="grid lg:grid-cols-2 gap-5">
+            <div className="rounded-3xl p-5" style={{ background:'linear-gradient(135deg, #080c14, #0a0a12)', border:'1px solid rgba(255,255,255,0.06)' }}>
+              <h3 className="text-xs font-black text-white uppercase tracking-wider mb-4">Calories Burned (14d)</h3>
+              {byDay.length === 0 ? <div className="h-44 flex items-center justify-center text-white/20 text-xs">No data yet — start logging</div> :
+                <ResponsiveContainer width="100%" height={176}>
+                  <RBarChart data={byDay}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                    <XAxis dataKey="label" stroke="rgba(255,255,255,0.15)" fontSize={9} />
+                    <YAxis stroke="rgba(255,255,255,0.15)" fontSize={9} />
+                    <Tooltip contentStyle={{ ...TT_STYLE, fontSize:11 }} />
+                    <Bar dataKey="calories" radius={[6,6,0,0]}>
+                      {byDay.map((_,i) => <Cell key={i} fill={`hsl(${190+i*5}, 80%, ${45+i*2}%)`} />)}
+                    </Bar>
+                  </RBarChart>
+                </ResponsiveContainer>}
+            </div>
+
+            <div className="rounded-3xl p-5" style={{ background:'linear-gradient(135deg, #080c14, #0a0a12)', border:'1px solid rgba(255,255,255,0.06)' }}>
+              <h3 className="text-xs font-black text-white uppercase tracking-wider mb-4">Recent Sessions</h3>
+              {items.length === 0 ? <div className="h-44 flex items-center justify-center text-white/20 text-xs">No sessions yet</div> :
+                <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                  {items.slice(0, 10).map(i => (
+                    <div key={i.id} className="flex items-center justify-between py-2.5 px-3 rounded-2xl group transition-all" style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(255,255,255,0.04)' }}
+                      onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.04)'}
+                      onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,0.02)'}>
+                      <div>
+                        <p className="text-xs font-black text-white">{i.name}</p>
+                        <p className="text-[10px] font-medium mt-0.5" style={{ color:'rgba(255,255,255,0.3)' }}>{i.sets}×{i.reps} · {i.weight}kg · {fmtDate(i.date)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {i.calories > 0 && <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background:'rgba(236,72,153,0.1)', color:'#f472b6', border:'1px solid rgba(236,72,153,0.2)' }}>{i.calories}cal</span>}
+                        <button onClick={()=>startEdit(i)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all" style={{ color:'#67e8f9' }}><NotebookPen className="w-3.5 h-3.5" /></button>
+                        <button onClick={()=>del(i.id)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all" style={{ color:'#f87171' }}><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ AI WORKOUT WIZARD MODAL ═══ */}
+      {showAiModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background:'rgba(0,0,0,0.85)', backdropFilter:'blur(20px)' }}>
+          <motion.div initial={{ opacity:0, scale:0.94, y:20 }} animate={{ opacity:1, scale:1, y:0 }} className="w-full max-w-xl rounded-3xl overflow-hidden relative" style={{ background:'linear-gradient(135deg, #080c14 0%, #0d0a1a 100%)', border:'1px solid rgba(255,255,255,0.08)', boxShadow:'0 40px 120px rgba(0,0,0,0.8), 0 0 60px rgba(6,182,212,0.08)' }}>
+            {/* Glow top */}
+            <div className="absolute top-0 left-0 right-0 h-px" style={{ background:'linear-gradient(90deg, transparent, rgba(6,182,212,0.6), rgba(139,92,246,0.6), transparent)' }} />
+            
+            <div className="px-6 pt-6 pb-5 border-b flex items-center justify-between" style={{ borderColor:'rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-2xl flex items-center justify-center" style={{ background:'linear-gradient(135deg, rgba(6,182,212,0.2), rgba(139,92,246,0.2))', border:'1px solid rgba(6,182,212,0.2)' }}>
+                  <Sparkles className="w-4.5 h-4.5 text-cyan-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">AI Workout Wizard</h3>
+                  <p className="text-[10px] font-medium mt-0.5" style={{ color:'rgba(255,255,255,0.35)' }}>Powered by GPT-4o — Biomechanical Optimization</p>
+                </div>
+              </div>
+              <button onClick={()=>{setShowAiModal(false);setGeneratedWorkout(null)}} className="w-8 h-8 rounded-xl flex items-center justify-center transition-all hover:bg-white/10" style={{ color:'rgba(255,255,255,0.4)' }}><X className="w-4 h-4" /></button>
+            </div>
+
+            <div className="p-6 max-h-[75vh] overflow-y-auto space-y-5">
+              {!generatedWorkout && !generating && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      ['Training Goal', aiGoal, setAiGoal, ['Hypertrophy','Strength','Fat Loss','Endurance','Athletic Performance','Powerbuilding']],
+                      ['Training Split', aiSplit, setAiSplit, ['Full Body','Push/Pull/Legs','Upper/Lower','Bro Split','Chest & Tris / Back & Bis','Core & Cardio']],
+                      ['Expertise Level', aiLevel, setAiLevel, ['beginner','intermediate','advanced','elite']],
+                      ['Intensity', aiIntensity, setAiIntensity, ['Low (Recovery)','Medium (Standard)','High (Intense)','Insane (Boss Fight)']],
+                    ].map(([label, val, setter, opts]) => (
+                      <div key={label}>
+                        <label className="text-[9px] font-black uppercase tracking-widest mb-1.5 block" style={{ color:'rgba(255,255,255,0.35)' }}>{label}</label>
+                        <select value={val} onChange={e=>setter(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-sm font-bold text-white focus:outline-none transition-all" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', colorScheme:'dark' }}>
+                          {opts.map(o => <option key={o} value={o} className="bg-zinc-900">{o}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                    <div>
+                      <label className="text-[9px] font-black uppercase tracking-widest mb-1.5 block" style={{ color:'rgba(255,255,255,0.35)' }}>Duration (minutes)</label>
+                      <input type="number" value={aiDuration} onChange={e=>setAiDuration(e.target.value)} placeholder="60" className="w-full px-3 py-2.5 rounded-xl text-sm font-black text-white focus:outline-none" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-widest mb-1.5 block" style={{ color:'rgba(16,185,129,0.7)' }}>Force-Include Exercises (optional)</label>
+                    <input value={aiInclude} onChange={e=>setAiInclude(e.target.value)} placeholder="e.g. Bench Press, Deadlift" className="w-full px-3 py-2.5 rounded-xl text-sm font-medium text-white placeholder-white/20 focus:outline-none" style={{ background:'rgba(16,185,129,0.05)', border:'1px solid rgba(16,185,129,0.15)' }} />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-widest mb-1.5 block" style={{ color:'rgba(239,68,68,0.7)' }}>Exclude / Avoid (optional)</label>
+                    <input value={aiExclude} onChange={e=>setAiExclude(e.target.value)} placeholder="e.g. Barbell Squat (knee injury)" className="w-full px-3 py-2.5 rounded-xl text-sm font-medium text-white placeholder-white/20 focus:outline-none" style={{ background:'rgba(239,68,68,0.05)', border:'1px solid rgba(239,68,68,0.15)' }} />
+                  </div>
+                  <button onClick={handleGenerateWorkout} className="w-full py-3.5 rounded-xl font-black text-sm uppercase tracking-widest text-white transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2.5" style={{ background:'linear-gradient(135deg, #06b6d4, #8b5cf6)', boxShadow:'0 0 40px rgba(6,182,212,0.25)' }}>
+                    <Sparkles className="w-4 h-4" /> Forge My Program
+                  </button>
+                </>
+              )}
+
+              {generating && (
+                <div className="py-16 flex flex-col items-center gap-5">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full border-2 animate-spin" style={{ borderColor:'rgba(6,182,212,0.2)', borderTopColor:'#06b6d4' }} />
+                    <div className="absolute inset-2 rounded-full border-2 animate-spin" style={{ borderColor:'rgba(139,92,246,0.2)', borderTopColor:'#8b5cf6', animationDirection:'reverse', animationDuration:'1.2s' }} />
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm font-black text-white uppercase tracking-wider">AI Analyzing Biomechanics</div>
+                    <p className="text-xs mt-2" style={{ color:'rgba(255,255,255,0.35)' }}>Computing optimal muscle activation patterns, recovery windows, and progressive overload...</p>
+                  </div>
+                </div>
+              )}
+
+              {generatedWorkout && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl" style={{ background:'linear-gradient(135deg, rgba(6,182,212,0.06), rgba(139,92,246,0.06))', border:'1px solid rgba(6,182,212,0.15)' }}>
+                    <h4 className="text-base font-black text-white">{generatedWorkout.routineName}</h4>
+                    <p className="text-xs mt-1 font-medium" style={{ color:'rgba(6,182,212,0.8)' }}>{generatedWorkout.focus}</p>
+                  </div>
+                  <div className="space-y-2">
+                    {generatedWorkout.exercises?.map((ex, i) => (
+                      <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-2xl" style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(255,255,255,0.05)' }}>
+                        <div className="flex-1">
+                          <div className="text-xs font-black text-white">{ex.name}</div>
+                          <div className="text-[10px] mt-0.5 font-medium" style={{ color:'rgba(255,255,255,0.35)' }}>{ex.muscleGroup} · {ex.weightSuggestion || 'Progressive'}</div>
+                          {ex.notes && <div className="text-[9px] mt-1 italic" style={{ color:'rgba(139,92,246,0.7)' }}>{ex.notes}</div>}
+                        </div>
+                        <div className="px-3 py-1.5 rounded-xl shrink-0" style={{ background:'rgba(6,182,212,0.1)', border:'1px solid rgba(6,182,212,0.2)' }}>
+                          <span className="text-xs font-black" style={{ color:'#67e8f9' }}>{ex.sets}×{ex.reps}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button onClick={()=>startSession(generatedWorkout)} className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-white transition-all hover:scale-105 active:scale-95" style={{ background:'linear-gradient(135deg, #06b6d4, #0ea5e9)', boxShadow:'0 0 20px rgba(6,182,212,0.2)' }}>
+                      ⚔ Enter Dungeon
+                    </button>
+                    <button onClick={()=>setGeneratedWorkout(null)} className="px-4 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.4)' }}>
+                      Rebuild
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </motion.div>
+  )
+}
 // ══════════════════════════════════════════════════════════
 // JOURNAL
 // ══════════════════════════════════════════════════════════
@@ -2634,7 +3759,7 @@ function EvolutionChamberSection({ refresh }) {
         desc="Digital avatar that evolves based on metrics (intelligence aura, physique, energy field, visual upgrades)"
         icon={User}
       />
-      <EvolutionChamber stats={stats} studyLogs={studyLogs} health={health} exercise={exercise} goals={goals} />
+      <EvolutionChamber stats={stats} studyLogs={studyLogs} health={health} exercise={exercise} goals={goals} refresh={refresh} />
     </motion.div>
   )
 }
@@ -3056,6 +4181,213 @@ function HolographicProjector({ activeId }) {
   )
 }
 
+const sidebarSpellVariants = {
+  closed: {
+    x: '-100%',
+    opacity: 0,
+    rotateY: -45,
+    skewY: -4,
+    scale: 0.92,
+    transition: {
+      type: 'spring',
+      stiffness: 300,
+      damping: 35
+    }
+  },
+  open: {
+    x: 0,
+    opacity: 1,
+    rotateY: 0,
+    skewY: 0,
+    scale: 1,
+    transition: {
+      type: 'spring',
+      stiffness: 180,
+      damping: 24,
+      staggerChildren: 0.05,
+      delayChildren: 0.1
+    }
+  }
+};
+
+function SidebarContent({
+  mobileOpen,
+  setMobileOpen,
+  desktopCollapsed,
+  setDesktopCollapsed,
+  active,
+  selectedSchool,
+  setSelectedSchool,
+  filteredNav,
+  triggerTransition,
+  time,
+  logout,
+  stats
+}) {
+  return (
+    <>
+      {/* Golden corner grimoire accents */}
+      <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-amber-500/40 pointer-events-none z-10" />
+      <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-amber-500/40 pointer-events-none z-10" />
+      <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-amber-500/40 pointer-events-none z-10" />
+      <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-amber-500/40 pointer-events-none z-10" />
+
+      <SidebarManaParticles />
+
+      {/* Logo */}
+      <div className="p-5 border-b border-white/5 relative z-10 shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl logo-pulse flex items-center justify-center animate-pulse"
+              style={{ background: 'linear-gradient(135deg, #fbbf24, #d97706)', boxShadow: '0 0 10px rgba(251,191,36,0.3)' }}>
+              <Sparkles className="w-4 h-4 text-black" />
+            </div>
+            <div>
+              <p className="font-black tracking-tight text-white text-base leading-none uppercase">GRIMOIRE</p>
+              <p className="text-[10px] text-amber-500/80 font-mono tracking-widest mt-0.5">Spell Deck v1.0</p>
+            </div>
+          </div>
+          {/* Desktop Collapse button */}
+          <button 
+            className="hidden lg:block text-white/30 hover:text-amber-400 p-1 ml-auto transition-colors cursor-pointer group" 
+            onClick={() => setDesktopCollapsed(true)}
+            title="Collapse Sidebar"
+          >
+            <ChevronRight className="w-4 h-4 rotate-180 group-hover:-translate-x-0.5 transition-transform" />
+          </button>
+          {/* Mobile Close button */}
+          <button className="lg:hidden text-white/30 hover:text-white p-1" onClick={() => setMobileOpen(false)}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Holographic Projector */}
+      <HolographicProjector activeId={active} />
+
+      {/* Magic School Filter Buttons */}
+      <div className="p-3 border-b border-white/5 relative z-10">
+        <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+          {['All', 'Divination', 'Conjuration', 'Evocation', 'Restoration'].map((school) => {
+            const isSel = selectedSchool === school
+            return (
+              <button
+                key={school}
+                onClick={() => setSelectedSchool(school)}
+                className={`text-[8px] font-black uppercase tracking-wider px-2 py-1 rounded-md transition-all duration-300 border shrink-0
+                  ${isSel ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 font-black' : 'bg-transparent border-white/5 text-white/40 hover:text-white/70'}`}
+                style={isSel ? { boxShadow: '0 0 8px rgba(245,158,11,0.2)' } : {}}
+              >
+                {school === 'All' ? 'All Arcana' : school}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Nav */}
+      <nav className="p-3 space-y-2.5 flex-1 overflow-visible lg:overflow-y-auto relative z-10 scrollbar-thin">
+        {filteredNav.map(n => {
+          const isActive = active === n.id
+          return (
+            <motion.button key={n.id}
+              whileHover={{ 
+                scale: 1.02, 
+                x: 4, 
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                boxShadow: `0 0 12px ${n.color}15`,
+                borderColor: `${n.color}30`
+              }}
+              whileTap={{ scale: 0.98 }}
+              onClick={(e) => {
+                fireFX('sidebarSelect', { x: e.clientX, y: e.clientY, color: n.color })
+                triggerTransition(n.id)
+                setMobileOpen(false)
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl border text-left transition-all duration-300 relative overflow-hidden
+                ${isActive ? 'text-white font-bold bg-white/5' : 'text-white/40 hover:text-white/80'}`}
+              style={{
+                borderColor: isActive ? `${n.color}40` : 'rgba(255,255,255,0.03)',
+                background: isActive ? `linear-gradient(90deg, ${n.color}08, transparent)` : 'transparent'
+              }}
+            >
+              {/* Active dynamic runic ring highlight */}
+              {isActive && (
+                <motion.div 
+                  layoutId="activeRunicBorder"
+                  className="absolute left-0 top-0 bottom-0 w-1 rounded-full"
+                  style={{ backgroundColor: n.color, boxShadow: `0 0 10px ${n.color}` }}
+                />
+              )}
+              
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 relative overflow-hidden"
+                style={isActive ? { background: `${n.color}15`, border: `1px solid ${n.color}35`, boxShadow: `0 0 10px ${n.color}30` } : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                {/* Active rotating spell ring background */}
+                {isActive && (
+                  <motion.div 
+                    className="absolute inset-0 rounded-xl border border-dashed pointer-events-none opacity-40"
+                    style={{ borderColor: n.color }}
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                  />
+                )}
+                <n.icon className="w-4 h-4 z-10" style={isActive ? { color: n.color, filter: `drop-shadow(0 0 4px ${n.color})` } : {}} />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-black tracking-wide truncate">{n.label}</span>
+                  <span className="text-[7px] font-bold opacity-60 uppercase tracking-widest px-1.5 py-0.5 rounded border ml-2"
+                    style={{ color: n.color, borderColor: `${n.color}30`, background: `${n.color}08` }}>
+                    {n.manaCost}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-0.5">
+                  <span className="text-[9px] font-mono opacity-50 truncate" style={{ color: isActive ? n.color : undefined }}>
+                    {n.spellName}
+                  </span>
+                  <span className="text-[7px] uppercase tracking-wider font-bold opacity-20">
+                    {n.school}
+                  </span>
+                </div>
+                {n.desc && (
+                  <div className="text-[8px] text-white/30 truncate mt-0.5 font-sans leading-none font-medium">
+                    {n.desc}
+                  </div>
+                )}
+              </div>
+            </motion.button>
+          )
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="p-4 border-t border-white/5 space-y-3 relative z-10">
+        <div className="flex items-center justify-between text-xs text-white/25">
+          <div className="flex items-center gap-1.5">
+            <Award className="w-3 h-3 text-amber-500" />
+            <span>Build something great</span>
+          </div>
+          <span className="font-mono text-amber-500/60">{time}</span>
+        </div>
+        <Button
+          onClick={logout}
+          variant="outline"
+          className="w-full py-2 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 text-xs font-medium"
+        >
+          Sign Out
+        </Button>
+        {stats && (
+          <div className="mt-2 flex items-center gap-1.5">
+            <Flame className="w-3 h-3 text-orange-400" style={{ filter: 'drop-shadow(0 0 4px #fb923c)' }} />
+            <span className="text-xs text-white/40">{stats.streak} day streak</span>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
 // ══════════════════════════════════════════════════════════
 // ROOT APP
 // ══════════════════════════════════════════════════════════
@@ -3064,6 +4396,7 @@ function AppContent() {
   const [active, setActive] = useState('dashboard')
   const [stats, setStats] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false)
   const [time, setTime] = useState('')
   const [activeTransition, setActiveTransition] = useState(null)
   const [pendingActive, setPendingActive] = useState(null)
@@ -3201,163 +4534,154 @@ function AppContent() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Sidebar */}
+      {/* Desktop Sidebar Toggle / Collapsed Grimoire Button */}
       <AnimatePresence>
-        {(mobileOpen || true) && (
-          <motion.aside
-            initial={false}
-            className={`${mobileOpen ? 'fixed inset-y-0 left-0 z-50 overflow-y-auto' : 'hidden'} lg:flex lg:static w-64 shrink-0 glass-sidebar flex-col relative lg:overflow-hidden`}
-            style={{
-              borderRight: '1px solid rgba(251, 191, 36, 0.15)',
-              boxShadow: 'inset -5px 0 25px rgba(0, 0, 0, 0.5)'
-            }}
+        {desktopCollapsed && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.5, rotate: -90, x: -30 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0, x: 0 }}
+            exit={{ opacity: 0, scale: 0.5, rotate: 90, x: -30 }}
+            whileHover={{ scale: 1.1, boxShadow: '0 0 20px rgba(251, 191, 36, 0.5)' }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setDesktopCollapsed(false)}
+            className="hidden lg:flex fixed left-5 top-5 z-40 w-12 h-12 rounded-xl items-center justify-center border border-amber-500/40 bg-black/85 text-amber-400 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.25)]"
+            style={{ backdropFilter: 'blur(10px)' }}
           >
-            {/* Golden corner grimoire accents */}
-            <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-amber-500/40 pointer-events-none z-10" />
-            <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-amber-500/40 pointer-events-none z-10" />
-            <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-amber-500/40 pointer-events-none z-10" />
-            <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-amber-500/40 pointer-events-none z-10" />
-
-            <SidebarManaParticles />
-
-            {/* Logo */}
-            <div className="p-5 border-b border-white/5 relative z-10 shrink-0">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl logo-pulse flex items-center justify-center animate-pulse"
-                    style={{ background: 'linear-gradient(135deg, #fbbf24, #d97706)', boxShadow: '0 0 10px rgba(251,191,36,0.3)' }}>
-                    <Sparkles className="w-4 h-4 text-black" />
-                  </div>
-                  <div>
-                    <p className="font-black tracking-tight text-white text-base leading-none uppercase">GRIMOIRE</p>
-                    <p className="text-[10px] text-amber-500/80 font-mono tracking-widest mt-0.5">Spell Deck v1.0</p>
-                  </div>
-                </div>
-                <button className="lg:hidden text-white/30 hover:text-white p-1" onClick={() => setMobileOpen(false)}>
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Holographic Projector */}
-            <HolographicProjector activeId={active} />
-
-            {/* Magic School Filter Buttons */}
-            <div className="p-3 border-b border-white/5 relative z-10">
-              <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
-                {['All', 'Divination', 'Conjuration', 'Evocation', 'Restoration'].map((school) => {
-                  const isSel = selectedSchool === school
-                  return (
-                    <button
-                      key={school}
-                      onClick={() => setSelectedSchool(school)}
-                      className={`text-[8px] font-black uppercase tracking-wider px-2 py-1 rounded-md transition-all duration-300 border shrink-0
-                        ${isSel ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 font-black' : 'bg-transparent border-white/5 text-white/40 hover:text-white/70'}`}
-                      style={isSel ? { boxShadow: '0 0 8px rgba(245,158,11,0.2)' } : {}}
-                    >
-                      {school === 'All' ? 'All Arcana' : school}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Nav */}
-            <nav className="p-3 space-y-2.5 flex-1 overflow-visible lg:overflow-y-auto relative z-10 scrollbar-thin">
-              {filteredNav.map(n => {
-                const isActive = active === n.id
-                return (
-                  <motion.button key={n.id}
-                    whileHover={{ 
-                      scale: 1.02, 
-                      x: 4, 
-                      backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                      boxShadow: `0 0 12px ${n.color}15`,
-                      borderColor: `${n.color}30`
-                    }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={(e) => {
-                      fireFX('sidebarSelect', { x: e.clientX, y: e.clientY, color: n.color })
-                      triggerTransition(n.id)
-                      setMobileOpen(false)
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl border text-left transition-all duration-300 relative overflow-hidden
-                      ${isActive ? 'text-white font-bold bg-white/5' : 'text-white/40 hover:text-white/80'}`}
-                    style={{
-                      borderColor: isActive ? `${n.color}40` : 'rgba(255,255,255,0.03)',
-                      background: isActive ? `linear-gradient(90deg, ${n.color}08, transparent)` : 'transparent'
-                    }}
-                  >
-                    {/* Active dynamic runic ring highlight */}
-                    {isActive && (
-                      <motion.div 
-                        layoutId="activeRunicBorder"
-                        className="absolute left-0 top-0 bottom-0 w-1 rounded-full"
-                        style={{ backgroundColor: n.color, boxShadow: `0 0 10px ${n.color}` }}
-                      />
-                    )}
-                    
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 relative overflow-hidden"
-                      style={isActive ? { background: `${n.color}15`, border: `1px solid ${n.color}35`, boxShadow: `0 0 10px ${n.color}30` } : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      <n.icon className="w-4 h-4" style={isActive ? { color: n.color, filter: `drop-shadow(0 0 4px ${n.color})` } : {}} />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-black tracking-wide truncate">{n.label}</span>
-                        <span className="text-[7px] font-bold opacity-60 uppercase tracking-widest px-1.5 py-0.5 rounded border ml-2"
-                          style={{ color: n.color, borderColor: `${n.color}30`, background: `${n.color}08` }}>
-                          {n.manaCost}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center mt-0.5">
-                        <span className="text-[9px] font-mono opacity-50 truncate" style={{ color: isActive ? n.color : undefined }}>
-                          {n.spellName}
-                        </span>
-                        <span className="text-[7px] uppercase tracking-wider font-bold opacity-20">
-                          {n.school}
-                        </span>
-                      </div>
-                      {n.desc && (
-                        <div className="text-[8px] text-white/30 truncate mt-0.5 font-sans leading-none font-medium">
-                          {n.desc}
-                        </div>
-                      )}
-                    </div>
-                  </motion.button>
-                )
-              })}
-            </nav>
-
-            {/* Footer */}
-            <div className="p-4 border-t border-white/5 space-y-3 relative z-10">
-              <div className="flex items-center justify-between text-xs text-white/25">
-                <div className="flex items-center gap-1.5">
-                  <Award className="w-3 h-3 text-amber-500" />
-                  <span>Build something great</span>
-                </div>
-                <span className="font-mono text-amber-500/60">{time}</span>
-              </div>
-              <Button
-                onClick={logout}
-                variant="outline"
-                className="w-full py-2 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 text-xs font-medium"
-              >
-                Sign Out
-              </Button>
-              {stats && (
-                <div className="mt-2 flex items-center gap-1.5">
-                  <Flame className="w-3 h-3 text-orange-400" style={{ filter: 'drop-shadow(0 0 4px #fb923c)' }} />
-                  <span className="text-xs text-white/40">{stats.streak} day streak</span>
-                </div>
-              )}
-            </div>
-          </motion.aside>
+            <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
+            <div className="absolute inset-0 border border-dashed border-amber-500/20 rounded-xl animate-[spin_20s_linear_infinite]" />
+          </motion.button>
         )}
       </AnimatePresence>
 
-      {/* Mobile overlay */}
-      {mobileOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm" onClick={() => setMobileOpen(false)} />}
+      {/* Desktop Sidebar */}
+      <motion.aside
+        animate={{
+          width: desktopCollapsed ? 0 : 256,
+          opacity: desktopCollapsed ? 0 : 1,
+          rotateY: desktopCollapsed ? -30 : 0,
+          scale: desktopCollapsed ? 0.95 : 1,
+        }}
+        transition={{
+          type: 'spring',
+          stiffness: 160,
+          damping: 24,
+        }}
+        className="hidden lg:flex shrink-0 glass-sidebar flex-col relative overflow-hidden h-screen"
+        style={{
+          borderRight: desktopCollapsed ? '0px solid transparent' : '1px solid rgba(251, 191, 36, 0.15)',
+          boxShadow: desktopCollapsed ? 'none' : 'inset -5px 0 25px rgba(0, 0, 0, 0.5)',
+          transformOrigin: 'left center'
+        }}
+      >
+        {/* Fixed-width wrapper to prevent layout squishing of children during collapse */}
+        <div className="w-64 h-full flex flex-col shrink-0 relative overflow-hidden">
+          {/* Spinning background magical circle on desktop */}
+          <motion.div
+            className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0 opacity-20 mix-blend-screen"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 45, repeat: Infinity, ease: "linear" }}
+          >
+            <svg className="w-[380px] h-[380px] text-amber-500" viewBox="0 0 200 200" fill="none" stroke="currentColor">
+              <circle cx="100" cy="100" r="90" strokeWidth="0.8" strokeDasharray="4 4" />
+              <circle cx="100" cy="100" r="82" strokeWidth="1.2" />
+              <circle cx="100" cy="100" r="50" strokeWidth="0.8" />
+              <polygon points="100,18 135,125 45,60 155,60 65,125" strokeWidth="0.8" strokeLinejoin="round" />
+              <circle cx="100" cy="100" r="8" fill="currentColor" opacity="0.4" />
+            </svg>
+          </motion.div>
+
+            <SidebarContent
+              mobileOpen={mobileOpen}
+              setMobileOpen={setMobileOpen}
+              desktopCollapsed={desktopCollapsed}
+              setDesktopCollapsed={setDesktopCollapsed}
+              active={active}
+              selectedSchool={selectedSchool}
+              setSelectedSchool={setSelectedSchool}
+              filteredNav={filteredNav}
+              triggerTransition={triggerTransition}
+              time={time}
+              logout={logout}
+              stats={stats}
+            />
+          </div>
+        </motion.aside>
+
+      {/* Mobile Sidebar with Magical Summoning Animation */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            {/* Dark blur backdrop */}
+            <motion.div
+              initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+              animate={{ opacity: 1, backdropFilter: 'blur(8px)' }}
+              exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+              transition={{ duration: 0.3 }}
+              className="fixed inset-0 bg-black/75 z-40 lg:hidden"
+              onClick={() => setMobileOpen(false)}
+            />
+
+            {/* Rotating magical spell summoning circle overlay */}
+            <motion.div
+              className="fixed inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-50 lg:hidden opacity-30 mix-blend-screen"
+              initial={{ opacity: 0, scale: 0.4, rotate: -90 }}
+              animate={{ opacity: [0, 0.35, 0.15], scale: [0.4, 1.4, 1.1], rotate: 180 }}
+              exit={{ opacity: 0, scale: 0.6, rotate: -45 }}
+              transition={{ duration: 1.0, ease: "easeInOut" }}
+            >
+              <svg className="w-[450px] h-[450px] text-amber-500 animate-[spin_30s_linear_infinite]" viewBox="0 0 200 200" fill="none" stroke="currentColor">
+                <circle cx="100" cy="100" r="90" strokeWidth="0.8" strokeDasharray="4 4" />
+                <circle cx="100" cy="100" r="82" strokeWidth="1.2" />
+                <circle cx="100" cy="100" r="65" strokeWidth="0.5" strokeDasharray="1 3" />
+                <circle cx="100" cy="100" r="50" strokeWidth="0.8" />
+                <polygon points="100,18 135,125 45,60 155,60 65,125" strokeWidth="0.8" strokeLinejoin="round" />
+                <polygon points="100,182 65,75 155,140 45,140 135,75" strokeWidth="0.4" strokeLinejoin="round" opacity="0.4" />
+                {Array.from({ length: 12 }).map((_, i) => {
+                  const angle = (i * 30 * Math.PI) / 180;
+                  const x1 = 100 + 72 * Math.cos(angle);
+                  const y1 = 100 + 72 * Math.sin(angle);
+                  const x2 = 100 + 78 * Math.cos(angle);
+                  const y2 = 100 + 78 * Math.sin(angle);
+                  return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth="1.2" />;
+                })}
+                <circle cx="100" cy="100" r="8" fill="currentColor" className="animate-pulse opacity-40" />
+              </svg>
+            </motion.div>
+
+            {/* Sidebar content container */}
+            <motion.aside
+              initial="closed"
+              animate="open"
+              exit="closed"
+              variants={sidebarSpellVariants}
+              className="fixed inset-y-0 left-0 z-50 w-64 glass-sidebar flex flex-col overflow-y-auto lg:hidden"
+              style={{
+                borderRight: '1px solid rgba(251, 191, 36, 0.25)',
+                boxShadow: '0 0 50px rgba(0, 0, 0, 0.8), inset -5px 0 25px rgba(251, 191, 36, 0.05)',
+                transformOrigin: 'left center'
+              }}
+            >
+              {/* Extra magical particle burst overlay */}
+              <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-cyan-500/0 to-transparent pointer-events-none mix-blend-screen" />
+              
+              <SidebarContent
+                mobileOpen={mobileOpen}
+                setMobileOpen={setMobileOpen}
+                desktopCollapsed={desktopCollapsed}
+                setDesktopCollapsed={setDesktopCollapsed}
+                active={active}
+                selectedSchool={selectedSchool}
+                setSelectedSchool={setSelectedSchool}
+                filteredNav={filteredNav}
+                triggerTransition={triggerTransition}
+                time={time}
+                logout={logout}
+                stats={stats}
+              />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Main */}
       <main className="flex-1 min-w-0 flex flex-col">

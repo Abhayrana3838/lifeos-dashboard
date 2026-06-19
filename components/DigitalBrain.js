@@ -1,7 +1,7 @@
 'use client'
 import { motion } from 'framer-motion'
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Search, Filter, Download, ZoomIn, ZoomOut, Maximize2, Brain, Activity, Zap, Target, Layers, Network, Sparkles, X, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Info, TrendingUp, BarChart3, Eye, EyeOff, Map, Route, Lightbulb, Cpu, Database, BookOpen, GraduationCap, Award, Clock } from 'lucide-react'
+import { Search, Filter, Download, ZoomIn, ZoomOut, Maximize2, Brain, Activity, Zap, Target, Layers, Network, Sparkles, X, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Info, TrendingUp, BarChart3, Eye, EyeOff, Map, Route, Lightbulb, Cpu, Database, BookOpen, GraduationCap, Award, Clock, AlertTriangle } from 'lucide-react'
 
 export default function DigitalBrain({ studyLogs, knowledge, skills, goals, tasks, journal, habits }) {
   const canvasRef = useRef(null)
@@ -59,19 +59,27 @@ export default function DigitalBrain({ studyLogs, knowledge, skills, goals, task
           }
         }
         subjects[log.subject].strength += (log.hours || 0) * 0.1
-        subjects[log.subject].activation = Math.min(1, subjects[log.subject].strength)
         subjects[log.subject].metadata.studyHours += (log.hours || 0)
         subjects[log.subject].metadata.sessions += 1
         subjects[log.subject].metadata.lastStudied = log.date
       })
       
       Object.values(subjects).forEach(subject => {
+        const lastStudied = subject.metadata.lastStudied
+        const days = lastStudied ? (Date.now() - new Date(lastStudied).getTime()) / (1000 * 60 * 60 * 24) : 99
+        const retention = Math.max(5, Math.round(Math.pow(0.5, days / 7) * 100)) // 7 days half life
+        subject.retention = retention
+        subject.activation = retention / 100
+        subject.decaying = retention < 50
         newNeurons.push(subject)
         neuronMap.set(subject.label, subject)
       })
       
       // Process knowledge entries
       knowledge?.forEach(item => {
+        const createdAt = item.createdAt
+        const days = createdAt ? (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24) : 99
+        const retention = Math.max(5, Math.round(Math.pow(0.5, days / 14) * 100)) // 14 days half life
         const neuron = {
           id: `knowledge-${item.id}`,
           label: item.title,
@@ -79,7 +87,9 @@ export default function DigitalBrain({ studyLogs, knowledge, skills, goals, task
           region: assignToRegion(item.title, regions),
           x: Math.random() * 100,
           y: Math.random() * 100,
-          activation: (item.confidence || 3) / 5,
+          retention,
+          activation: retention / 100,
+          decaying: retention < 50,
           strength: (item.confidence || 3) / 5,
           color: getTypeColor(item.type),
           metadata: {
@@ -135,7 +145,7 @@ export default function DigitalBrain({ studyLogs, knowledge, skills, goals, task
       setNeuralActivity(activity)
       
       // Generate brain insights
-      const insights = generateBrainInsights(analyticsData, regions, learningPaths)
+      const insights = generateBrainInsights(analyticsData, regions, learningPaths, newNeurons)
       setBrainInsights(insights)
     }
     
@@ -335,9 +345,29 @@ export default function DigitalBrain({ studyLogs, knowledge, skills, goals, task
     return activity
   }
   
-  const generateBrainInsights = (analytics, regions, learningPaths) => {
+  const generateBrainInsights = (analytics, regions, learningPaths, neurons) => {
     const insights = []
     
+    // Memory Decay Check
+    const decayingList = (neurons || []).filter(n => n.decaying).sort((a, b) => (a.retention || 100) - (b.retention || 100))
+    if (decayingList.length > 0) {
+      insights.push({
+        type: 'decay',
+        icon: AlertTriangle,
+        title: `${decayingList.length} Memories Decaying`,
+        description: `Weakest: ${decayingList[0].label} (${decayingList[0].retention}% strength). Review via Revision Gate to restore!`,
+        severity: 'warning'
+      })
+    } else if (neurons && neurons.length > 0) {
+      insights.push({
+        type: 'decay',
+        icon: Award,
+        title: 'Cognitive Memory Intact',
+        description: 'All memory streams are currently stable above 50% retention.',
+        severity: 'success'
+      })
+    }
+
     if (analytics.neuralActivity > 80) {
       insights.push({
         type: 'activity',
@@ -537,10 +567,11 @@ export default function DigitalBrain({ studyLogs, knowledge, skills, goals, task
       const x = centerX + (neuron.x - 50) / 100 * brainWidth * 0.8
       const y = centerY + (neuron.y - 50) / 100 * brainHeight * 0.8
       
+      const activeColor = neuron.decaying ? '#ef4444' : neuron.color
       const glowSize = 10 + neuron.activation * 20
       const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, glowSize)
-      glowGradient.addColorStop(0, neuron.color)
-      glowGradient.addColorStop(0.5, neuron.color + '60')
+      glowGradient.addColorStop(0, activeColor)
+      glowGradient.addColorStop(0.5, activeColor + '60')
       glowGradient.addColorStop(1, 'transparent')
       
       ctx.beginPath()
@@ -551,7 +582,7 @@ export default function DigitalBrain({ studyLogs, knowledge, skills, goals, task
       const coreSize = 5 + neuron.strength * 5
       ctx.beginPath()
       ctx.arc(x, y, coreSize, 0, Math.PI * 2)
-      ctx.fillStyle = neuron.color
+      ctx.fillStyle = activeColor
       ctx.fill()
       
       if (neuron.activation > 0.5) {
@@ -634,10 +665,11 @@ export default function DigitalBrain({ studyLogs, knowledge, skills, goals, task
       const x = centerX + (neuron.x - 50) / 100 * width * 0.8
       const y = centerY + (neuron.y - 50) / 100 * height * 0.8
       
+      const activeColor = neuron.decaying ? '#ef4444' : neuron.color
       const glowSize = 12 + neuron.activation * 18
       const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, glowSize)
-      glowGradient.addColorStop(0, neuron.color)
-      glowGradient.addColorStop(0.5, neuron.color + '60')
+      glowGradient.addColorStop(0, activeColor)
+      glowGradient.addColorStop(0.5, activeColor + '60')
       glowGradient.addColorStop(1, 'transparent')
       
       ctx.beginPath()
@@ -648,14 +680,14 @@ export default function DigitalBrain({ studyLogs, knowledge, skills, goals, task
       const coreSize = 6 + neuron.strength * 4
       ctx.beginPath()
       ctx.arc(x, y, coreSize, 0, Math.PI * 2)
-      ctx.fillStyle = neuron.color
+      ctx.fillStyle = activeColor
       ctx.fill()
       
       if (showLabels) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
         ctx.font = '9px Arial'
         ctx.textAlign = 'center'
-        ctx.fillText(neuron.label.substring(0, 10), x, y + coreSize + 12)
+        ctx.fillText(`${neuron.label.substring(0, 10)} (${neuron.retention || 100}%)`, x, y + coreSize + 12)
       }
     })
   }
