@@ -1,0 +1,17 @@
+{
+  "buildCommand": "next build",
+  "outputDirectory": ".next",
+  "devCommand": "next dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "env": {
+    "NEXT_PUBLIC_BASE_URL": "@base-url",
+    "MONGO_URL": "@mongo-url",
+    "DB_NAME": "@db-name",
+    "JWT_SECRET": "@jwt-secret",
+    "OPENAI_API_KEY": "@openai-api-key",
+    "RAZORPAY_KEY_ID": "@razorpay-key-id",
+    "RAZORPAY_KEY_SECRET": "@razorpay-key-secret"
+  }
+}
