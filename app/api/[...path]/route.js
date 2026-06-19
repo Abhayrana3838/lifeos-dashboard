@@ -4,19 +4,32 @@ import { v4 as uuid } from 'uuid'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 
-const client = new MongoClient(process.env.MONGO_URL, {
-  maxPoolSize: 10,
-  minPoolSize: 2,
-  maxIdleTimeMS: 30000,
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000,
-})
+let client = null
 let _db = null
+
+async function getClient() {
+  if (!client) {
+    const mongoUrl = process.env.MONGO_URL
+    if (!mongoUrl) {
+      throw new Error('MONGO_URL environment variable is not set')
+    }
+    client = new MongoClient(mongoUrl, {
+      maxPoolSize: 10,
+      minPoolSize: 2,
+      maxIdleTimeMS: 30000,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    })
+  }
+  return client
+}
+
 async function db() {
   if (_db) return _db
   try {
-    await client.connect()
-    _db = client.db(process.env.DB_NAME || 'lifeos')
+    const mongoClient = await getClient()
+    await mongoClient.connect()
+    _db = mongoClient.db(process.env.DB_NAME || 'lifeos')
     return _db
   } catch (error) {
     console.error('MongoDB connection error:', error)
