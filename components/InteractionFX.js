@@ -363,13 +363,113 @@ function explodeStudyLog(x, y, hours, particles, ripples, texts) {
   texts.push(new FloatText({ x, y: y - 15, text: `📚 +${hours}h POWER GAINED`, color: '#22d3ee', size: 17, life: 1.8 }))
 }
 
+/* ── Magic Spell Circle ──────────────────────────────────────────── */
+class MagicSpell {
+  constructor({ x, y, color, size = 70, life = 1.0 }) {
+    this.x = x; this.y = y; this.color = color
+    this.size = size; this.maxLife = life; this.ttl = life
+    this.rotation = 0; this.life = 1
+  }
+  update(dt) {
+    this.ttl -= dt
+    this.life = Math.max(0, this.ttl / this.maxLife)
+    this.rotation += dt * 3.5 // Rotate magic circle
+    return this.life > 0
+  }
+  draw(ctx) {
+    ctx.save()
+    ctx.globalAlpha = this.life * this.life
+    ctx.translate(this.x, this.y)
+    ctx.rotate(this.rotation)
+
+    // Glow effect
+    ctx.shadowBlur  = 20 * this.life
+    ctx.shadowColor = this.color
+    ctx.strokeStyle = this.color
+
+    // Outer circle ring
+    ctx.lineWidth = 3.5 * this.life
+    ctx.beginPath()
+    ctx.arc(0, 0, this.size * this.life, 0, Math.PI * 2)
+    ctx.stroke()
+
+    // Inner dashed ring
+    ctx.lineWidth = 1.5 * this.life
+    ctx.setLineDash([6, 8])
+    ctx.beginPath()
+    ctx.arc(0, 0, this.size * 0.7 * this.life, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.setLineDash([])
+
+    // Star/Polygon seal pattern
+    ctx.lineWidth = 1.0 * this.life
+    ctx.beginPath()
+    const points = 6
+    for (let i = 0; i < points; i++) {
+      const angle = (i * Math.PI * 2) / points
+      const x1 = Math.cos(angle) * this.size * this.life
+      const y1 = Math.sin(angle) * this.size * this.life
+      const nextAngle = ((i + 2) * Math.PI * 2) / points
+      const x2 = Math.cos(nextAngle) * this.size * this.life
+      const y2 = Math.sin(nextAngle) * this.size * this.life
+      if (i === 0) ctx.moveTo(x1, y1)
+      ctx.lineTo(x2, y2)
+    }
+    ctx.closePath()
+    ctx.stroke()
+
+    // Outer notches/ticks
+    ctx.lineWidth = 2.0 * this.life
+    for (let i = 0; i < 12; i++) {
+      const angle = (i * Math.PI * 2) / 12
+      const x1 = Math.cos(angle) * this.size * 0.9 * this.life
+      const y1 = Math.sin(angle) * this.size * 0.9 * this.life
+      const x2 = Math.cos(angle) * this.size * 1.1 * this.life
+      const y2 = Math.sin(angle) * this.size * 1.1 * this.life
+      ctx.beginPath()
+      ctx.moveTo(x1, y1)
+      ctx.lineTo(x2, y2)
+      ctx.stroke()
+    }
+
+    ctx.restore()
+  }
+}
+
+function explodeSidebarSelect(x, y, color, particles, ripples, texts, spells) {
+  // Spawn the magic circle seal
+  spells.push(new MagicSpell({ x, y, color, size: 75, life: 1.0 }))
+
+  // Spawn matching bursts of dynamic stars and diamond sparkles
+  for (let i = 0; i < 30; i++) {
+    const ang = Math.random() * Math.PI * 2
+    const speed = 1.5 + Math.random() * 4.5
+    const type = Math.random() < 0.35 ? 'star' : Math.random() < 0.5 ? 'diamond' : 'spark'
+    particles.push(new Particle({
+      x, y,
+      vx: Math.cos(ang) * speed,
+      vy: Math.sin(ang) * speed,
+      color,
+      size: 2.0 + Math.random() * 4.0,
+      life: 0.5 + Math.random() * 0.6,
+      gravity: 0,
+      drag: 0.96,
+      glow: true,
+      type
+    }))
+  }
+
+  // Ripple aura
+  ripples.push(new Ripple({ x, y, color, maxR: 120, speed: 2.0, lineWidth: 2 }))
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    COMPONENT
 ══════════════════════════════════════════════════════════════════════ */
 export default function InteractionFX() {
   const canvasRef  = useRef(null)
   const stateRef   = useRef({
-    particles: [], ripples: [], texts: [], lightnings: [], flashes: [],
+    particles: [], ripples: [], texts: [], lightnings: [], flashes: [], spells: [],
     raf: null, lastT: 0,
   })
 
@@ -400,6 +500,9 @@ export default function InteractionFX() {
 
       /* Draw flashes */
       s.flashes = s.flashes.filter(f => { if (f.update(dt)) { f.draw(ctx, W, H); return true } return false })
+
+      /* Draw spells */
+      s.spells = s.spells.filter(sp => { if (sp.update(dt)) { sp.draw(ctx); return true } return false })
 
       /* Draw ripples */
       s.ripples = s.ripples.filter(r => { if (r.update(dt)) { r.draw(ctx); return true } return false })
@@ -440,6 +543,10 @@ export default function InteractionFX() {
       'fx:studyLog': (e) => {
         const { x = window.innerWidth/2, y = window.innerHeight/2, hours = 0 } = e.detail || {}
         explodeStudyLog(x, y, hours, s.particles, s.ripples, s.texts)
+      },
+      'fx:sidebarSelect': (e) => {
+        const { x = window.innerWidth/2, y = window.innerHeight/2, color = '#fbbf24' } = e.detail || {}
+        explodeSidebarSelect(x, y, color, s.particles, s.ripples, s.texts, s.spells)
       },
     }
 

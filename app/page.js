@@ -52,33 +52,35 @@ import LockedFeature from '@/components/LockedFeature'
 import { SubscriptionProvider, useSubscription, hasPremiumAccess } from '@/lib/subscription'
 import { Crown } from 'lucide-react'
 import CinematicOverlay from '@/components/CinematicOverlay'
+import GuildChamber from '@/components/GuildChamber'
 
 // ─── Constants ────────────────────────────────────────────
 const NAV = [
-  { id: 'dashboard', label: 'Hunter Status', icon: LayoutDashboard, color: '#22d3ee' },
-  { id: 'quiz-revision', label: 'Revision Gate', icon: Award, color: '#f59e0b' },
-  { id: 'meditate', label: 'Meditation Chamber', icon: Zap, color: '#ec4899' },
-  { id: 'ai-planner', label: 'AI Planner', icon: Bot, color: '#22d3ee', premium: 'ai-planner' },
-  { id: 'daily-plan', label: 'Daily Plan', icon: Sparkles, color: '#8b5cf6', premium: 'ai-planner' },
-  { id: 'study', label: 'Training logs', icon: BookOpen, color: '#34d399' },
-  { id: 'habits', label: 'Habits', icon: Activity, color: '#f472b6' },
-  { id: 'tasks', label: 'Quests', icon: ListChecks, color: '#fbbf24' },
-  { id: 'goals', label: 'Milestones', icon: Target, color: '#f87171' },
-  { id: 'health', label: 'Recovery Status', icon: Heart, color: '#f472b6' },
-  { id: 'exercise', label: 'Physical training', icon: Dumbbell, color: '#a78bfa' },
-  { id: 'journal', label: 'Journal', icon: NotebookPen, color: '#38bdf8' },
-  { id: 'knowledge', label: 'Library', icon: Library, color: '#fb923c' },
-  { id: 'analytics', label: 'Evaluation Charts', icon: BarChart3, color: '#4ade80', premium: 'advanced-analytics' },
-  { id: 'pricing', label: 'Upgrade Plan', icon: Crown, color: '#fbbf24' },
-  { id: 'constellation', label: 'Data Constellation', icon: Star, color: '#fbbf24', premium: 'data-constellation' },
-  { id: 'neural-network', label: 'Neural Network', icon: Brain, color: '#8b5cf6', premium: 'neural-network' },
-  { id: 'knowledge-galaxy', label: 'Knowledge Galaxy', icon: Globe, color: '#22d3ee', premium: 'knowledge-galaxy' },
-  { id: 'growth-tree', label: 'Growth Tree', icon: TreeDeciduous, color: '#34d399', premium: 'growth-tree' },
-  { id: 'evolution', label: 'Evolution Chamber', icon: User, color: '#f472b6', premium: 'evolution' },
-  { id: 'digital-brain', label: 'Digital Brain', icon: Brain, color: '#a78bfa', premium: 'digital-brain' },
-  { id: 'time-river', label: 'Time River', icon: Waves, color: '#38bdf8', premium: 'time-river' },
-  { id: 'knowledge-fractal', label: 'Knowledge Fractal', icon: Infinity, color: '#fbbf24', premium: 'knowledge-fractal' },
-  { id: 'predictive-future', label: 'Predictive Future', icon: Compass, color: '#4ade80', premium: 'predictive-future' },
+  { id: 'dashboard', label: 'Hunter Status', spellName: 'Seer\'s Aura Scan', manaCost: 'Free', school: 'Divination', icon: LayoutDashboard, color: '#22d3ee', desc: 'Main status, stats & CP gauges' },
+  { id: 'guilds', label: 'Hunter Guilds', spellName: 'Covenant Summoning', manaCost: '40 MP', school: 'Conjuration', icon: Trophy, color: '#fbbf24', desc: 'Raid lobby chat & rankings leaderboard' },
+  { id: 'quiz-revision', label: 'Revision Gate', spellName: 'Chamber of Runes', manaCost: '15 MP', school: 'Evocation', icon: Award, color: '#f59e0b', desc: 'Solve study quizzes & clear mind decay' },
+  { id: 'meditate', label: 'Meditation Chamber', spellName: 'Mana Influx Shield', manaCost: '5 MP', school: 'Restoration', icon: Zap, color: '#ec4899', desc: 'Calming breathing to restore Mana & Focus' },
+  { id: 'ai-planner', label: 'AI Planner', spellName: 'Grand Grimoire', manaCost: '50 MP', school: 'Conjuration', icon: Bot, color: '#22d3ee', premium: 'ai-planner', desc: 'Generate optimized roadmaps from prompts' },
+  { id: 'daily-plan', label: 'Daily Plan', spellName: 'Solar Alignment', manaCost: '10 MP', school: 'Conjuration', icon: Sparkles, color: '#8b5cf6', premium: 'ai-planner', desc: 'Checklist and hourly schedule for today' },
+  { id: 'study', label: 'Training logs', spellName: 'Archivist Archive', manaCost: '20 MP', school: 'Evocation', icon: BookOpen, color: '#34d399', desc: 'History of logged study hours & topics' },
+  { id: 'habits', label: 'Habits', spellName: 'Chrono Runic Bonds', manaCost: '10 MP', school: 'Evocation', icon: Activity, color: '#f472b6', desc: 'Build consistency and track active streaks' },
+  { id: 'tasks', label: 'Quests', spellName: 'Task Extraction Gate', manaCost: '12 MP', school: 'Conjuration', icon: ListChecks, color: '#fbbf24', desc: 'Checklist of general quests & priorities' },
+  { id: 'goals', label: 'Milestones', spellName: 'Pinnacle Sigil', manaCost: '30 MP', school: 'Conjuration', icon: Target, color: '#f87171', desc: 'Set and track long-term life objectives' },
+  { id: 'health', label: 'Recovery Status', spellName: 'Vitalic Regeneration', manaCost: '5 MP', school: 'Restoration', icon: Heart, color: '#f472b6', desc: 'Monitor sleep, nutrition, water & weight' },
+  { id: 'exercise', label: 'Physical training', spellName: 'Kinesis Might', manaCost: '25 MP', school: 'Evocation', icon: Dumbbell, color: '#a78bfa', desc: 'Record exercise workouts, sets, and reps' },
+  { id: 'journal', label: 'Journal', spellName: 'Epistolary Soul Bind', manaCost: '8 MP', school: 'Restoration', icon: NotebookPen, color: '#38bdf8', desc: 'Write reflections, wins, and daily lessons' },
+  { id: 'knowledge', label: 'Library', spellName: 'Cognitive Cache', manaCost: '15 MP', school: 'Conjuration', icon: Library, color: '#fb923c', desc: 'Catalog read books and confidence levels' },
+  { id: 'analytics', label: 'Evaluation Charts', spellName: 'Chart Divination', manaCost: '30 MP', school: 'Divination', icon: BarChart3, color: '#4ade80', premium: 'advanced-analytics', desc: 'Analyze habits, heatmaps, and stats' },
+  { id: 'pricing', label: 'Upgrade Plan', spellName: 'Apex Ascension Contract', manaCost: '99 MP', school: 'Conjuration', icon: Crown, color: '#fbbf24', desc: 'Manage subscription plan and payments' },
+  { id: 'constellation', label: 'Data Constellation', spellName: 'Astraea Projection', manaCost: '45 MP', school: 'Divination', icon: Star, color: '#fbbf24', premium: 'data-constellation', desc: 'Interactive 3D graph of all study logs' },
+  { id: 'neural-network', label: 'Neural Network', spellName: 'Synaptic Linkage', manaCost: '50 MP', school: 'Conjuration', icon: Brain, color: '#8b5cf6', premium: 'neural-network', desc: 'Synaptic map of linked tasks & habits' },
+  { id: 'knowledge-galaxy', label: 'Knowledge Galaxy', spellName: 'Nebula Constellation', manaCost: '60 MP', school: 'Divination', icon: Globe, color: '#22d3ee', premium: 'knowledge-galaxy', desc: '3D floating nodes of logged topics' },
+  { id: 'growth-tree', label: 'Growth Tree', spellName: 'Yggdrasil Rootage', manaCost: '40 MP', school: 'Conjuration', icon: TreeDeciduous, color: '#34d399', premium: 'growth-tree', desc: 'Watch tree grow as goals are achieved' },
+  { id: 'evolution', label: 'Evolution Chamber', spellName: 'Ascendant Genesis', manaCost: '75 MP', school: 'Conjuration', icon: User, color: '#f472b6', premium: 'evolution', desc: 'Gamified upgrades linked to quest completions' },
+  { id: 'digital-brain', label: 'Digital Brain', spellName: 'Cortex Matrix Overload', manaCost: '70 MP', school: 'Divination', icon: Brain, color: '#a78bfa', premium: 'digital-brain', desc: 'Active recall memory nodes visualizer' },
+  { id: 'time-river', label: 'Time River', spellName: 'Chrono-Flux Stream', manaCost: '55 MP', school: 'Conjuration', icon: Waves, color: '#38bdf8', premium: 'time-river', desc: 'Weekly and monthly time stream breakdown' },
+  { id: 'knowledge-fractal', label: 'Knowledge Fractal', spellName: 'Infinite Recur Sigil', manaCost: '80 MP', school: 'Conjuration', icon: Infinity, color: '#fbbf24', premium: 'knowledge-fractal', desc: 'Fractal geometry representing learning depth' },
+  { id: 'predictive-future', label: 'Predictive Future', spellName: 'Temporal Foresight', manaCost: '90 MP', school: 'Divination', icon: Compass, color: '#4ade80', premium: 'predictive-future', desc: 'Forecast consistency and focus trends' },
 ]
 
 const CHART_COLORS = ['#8b5cf6', '#22d3ee', '#34d399', '#f472b6', '#fbbf24', '#f87171', '#a78bfa', '#38bdf8']
@@ -344,29 +346,101 @@ function Dashboard({ stats, refresh, go }) {
             </div>
           </div>
 
-          {/* Combat Power Frame */}
-          <div className="glass-card rounded-2xl p-5 border border-cyan-500/20 text-center w-full md:w-56 shrink-0 relative overflow-hidden flex flex-col justify-center">
-            <div className="absolute top-0 right-0 w-2 h-2 bg-cyan-400 rounded-bl-sm" />
-            <div className="absolute bottom-0 left-0 w-2 h-2 bg-cyan-400 rounded-tr-sm" />
-            <span className="text-[10px] tracking-widest text-cyan-400 uppercase font-black">Combat Power</span>
-            <span className="text-3xl font-black text-white mt-1 hunter-title-glow tracking-tighter">
-              {g.combatPower.toLocaleString()}
-            </span>
-            <Separator className="my-3 bg-white/10" />
-            <div className="text-[10px] text-white/40 space-y-1">
-              <div className="flex justify-between">
-                <span>MIND SHARPNESS:</span>
-                <span className={g.mindSharpness > 60 ? "text-cyan-400 font-bold" : "text-rose-400 font-bold animate-pulse"}>
-                  {g.mindSharpness}%
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>STREAK MULTIPLIER:</span>
-                <span className="text-amber-400 font-bold">x{(1 + (stats.streak * 0.05)).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>MANA STREAMS:</span>
-                <span className="text-pink-400 font-bold">{g.totalMeditationMinutes || 0} min</span>
+          {/* Holographic Hunter Status Panel */}
+          <div className="glass-card rounded-2xl p-5 border border-cyan-500/30 w-full md:w-80 shrink-0 relative overflow-hidden flex flex-col justify-between"
+            style={{
+              background: 'linear-gradient(135deg, rgba(6, 18, 36, 0.9) 0%, rgba(2, 6, 12, 0.95) 100%)',
+              boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.7), inset 0 0 15px rgba(34, 211, 238, 0.1)'
+            }}
+          >
+            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent" />
+            <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-cyan-400 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-cyan-400 pointer-events-none" />
+
+            {/* Title & Class */}
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[9px] tracking-widest text-cyan-400 font-mono uppercase">HUNTER STATUS WINDOW</span>
+              <span className="text-[10px] text-amber-400 font-black tracking-widest uppercase animate-pulse">{g.hunterClass || 'Shadow Monarch'}</span>
+            </div>
+
+            {/* Combat Power & Level Display */}
+            <div className="text-center py-2 bg-cyan-950/20 border border-cyan-500/10 rounded-xl mb-4 relative overflow-hidden">
+              <div className="absolute inset-0 bg-cyan-500/5 pointer-events-none animate-pulse" />
+              <p className="text-[9px] tracking-widest text-cyan-300/60 uppercase font-mono">COMBAT POWER (CP)</p>
+              <h2 className="text-4xl font-black text-white mt-1 hunter-title-glow tracking-tighter filter drop-shadow-[0_0_8px_rgba(34,211,238,0.4)]">
+                {g.combatPower.toLocaleString()}
+              </h2>
+            </div>
+
+            {/* Attributes Grid */}
+            <div className="space-y-3.5">
+              <span className="text-[8px] font-black tracking-widest text-white/40 uppercase block mb-1 font-mono">PRIMARY ATTRIBUTES</span>
+              
+              {[
+                { name: 'STR [Strength]', val: g.attributes?.strength || 10, max: 150, color: 'from-orange-500 to-red-600', glow: 'rgba(239,68,68,0.3)', desc: 'Increases exercise volume & quest capacity' },
+                { name: 'AGI [Agility]', val: g.attributes?.agility || 10, max: 150, color: 'from-amber-400 to-yellow-500', glow: 'rgba(245,158,11,0.3)', desc: 'Boosts habit consistency & streak counts' },
+                { name: 'INT [Intelligence]', val: g.attributes?.intelligence || 10, max: 150, color: 'from-cyan-400 to-violet-600', glow: 'rgba(139,92,246,0.3)', desc: 'Derived from study hours & library archives' },
+                { name: 'VIT [Vitality]', val: g.attributes?.vitality || 10, max: 150, color: 'from-emerald-400 to-teal-500', glow: 'rgba(52,211,153,0.3)', desc: 'Calculated from sleep, water & health indicators' },
+                { name: 'SEN [Sense]', val: g.attributes?.sense || 10, max: 150, color: 'from-pink-500 to-fuchsia-600', glow: 'rgba(217,70,239,0.3)', desc: 'Enhanced by meditation focus & journaling reflections' }
+              ].map(attr => {
+                const pct = Math.min(100, Math.round((attr.val / attr.max) * 100))
+                return (
+                  <div key={attr.name} className="group relative space-y-1 cursor-help">
+                    <div className="flex justify-between text-[10px] font-mono">
+                      <span className="text-white/70 group-hover:text-cyan-300 transition-colors">{attr.name}</span>
+                      <span className="text-white font-bold">{attr.val} <span className="text-[8px] text-white/30 font-normal">/ {attr.max}</span></span>
+                    </div>
+                    
+                    {/* Glowing Progress Bar */}
+                    <div className="w-full h-2 bg-black/60 rounded-full border border-white/5 overflow-hidden relative">
+                      <motion.div 
+                        initial={{ width: 0 }} 
+                        animate={{ width: `${pct}%` }} 
+                        transition={{ duration: 1, ease: 'easeOut' }}
+                        className={`h-full rounded-full bg-gradient-to-r ${attr.color}`}
+                        style={{ boxShadow: `0 0 8px ${attr.glow}` }}
+                      />
+                    </div>
+
+                    {/* Popover Hover Hint */}
+                    <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block z-50 bg-black/95 border border-cyan-500/40 text-[9px] text-cyan-200/90 px-2.5 py-1.5 rounded-lg max-w-[220px] font-mono shadow-2xl backdrop-blur-md">
+                      <p className="font-bold text-white mb-0.5">{attr.desc}</p>
+                      <p className="text-[8px] text-white/40">Increases as you log more related activities in the dashboard.</p>
+                    </div>
+                  </div>
+                )
+              })}
+
+              <Separator className="my-3 bg-white/10" />
+
+              {/* Status Pools (Mana & Mind) */}
+              <div className="space-y-2 text-[10px] font-mono">
+                <div className="flex justify-between items-center">
+                  <span className="text-cyan-400/80 flex items-center gap-1">
+                    <Brain className="w-3 h-3" /> FOCUS (MIND)
+                  </span>
+                  <span className={g.mindSharpness > 60 ? "text-cyan-400 font-bold" : "text-rose-400 font-bold animate-pulse"}>
+                    {g.mindSharpness}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-black/60 rounded-full overflow-hidden relative">
+                  <div className="h-full bg-cyan-400 rounded-full shadow-[0_0_8px_#22d3ee]" style={{ width: `${g.mindSharpness}%` }} />
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-pink-400/80 flex items-center gap-1">
+                    <Zap className="w-3 h-3" /> MANA STREAMS
+                  </span>
+                  <span className="text-pink-400 font-bold">{g.totalMeditationMinutes || 0} min</span>
+                </div>
+                <div className="w-full h-1.5 bg-black/60 rounded-full overflow-hidden relative">
+                  <div className="h-full bg-pink-500 rounded-full shadow-[0_0_8px_#ec4899]" style={{ width: `${Math.min(100, (g.totalMeditationMinutes || 0) * 2)}%` }} />
+                </div>
+
+                <div className="flex justify-between text-[9px] text-white/40 pt-1.5">
+                  <span>STREAK BOOST:</span>
+                  <span className="text-amber-400 font-bold">x{(1 + (stats.streak * 0.05)).toFixed(2)}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -2822,6 +2896,166 @@ function DailyPlanSection({ refresh }) {
   )
 }
 
+function SidebarManaParticles() {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    let animationFrameId
+    let particles = []
+
+    const resize = () => {
+      if (canvas.parentElement) {
+        canvas.width = canvas.parentElement.clientWidth
+        canvas.height = canvas.parentElement.clientHeight
+      }
+    }
+    resize()
+    window.addEventListener('resize', resize)
+
+    // Create particles
+    for (let i = 0; i < 20; i++) {
+      particles.push({
+        x: Math.random() * (canvas.width || 250),
+        y: Math.random() * (canvas.height || 800),
+        size: Math.random() * 1.5 + 0.5,
+        speedY: -(Math.random() * 0.4 + 0.15),
+        speedX: (Math.random() - 0.5) * 0.2,
+        alpha: Math.random() * 0.5 + 0.2,
+        color: ['#fbbf24', '#a78bfa', '#22d3ee', '#34d399'][Math.floor(Math.random() * 4)]
+      })
+    }
+
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      particles.forEach(p => {
+        p.y += p.speedY
+        p.x += p.speedX
+        if (p.y < 0) {
+          p.y = canvas.height
+          p.x = Math.random() * canvas.width
+        }
+        ctx.save()
+        ctx.globalAlpha = p.alpha
+        ctx.fillStyle = p.color
+        ctx.shadowBlur = 8
+        ctx.shadowColor = p.color
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.restore()
+      })
+      animationFrameId = requestAnimationFrame(animate)
+    }
+    animate()
+
+    return () => {
+      cancelAnimationFrame(animationFrameId)
+      window.removeEventListener('resize', resize)
+    }
+  }, [])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 pointer-events-none opacity-30 z-0"
+    />
+  )
+}
+
+function HolographicProjector({ activeId }) {
+  const activeItem = useMemo(() => {
+    return NAV.find(n => n.id === activeId) || NAV[0]
+  }, [activeId])
+
+  return (
+    <div className="relative h-44 flex flex-col items-center justify-end pb-4 border-b border-white/5 overflow-hidden w-full shrink-0">
+      {/* Light Projection Rays */}
+      <div 
+        className="absolute bottom-6 w-24 h-32 pointer-events-none transition-all duration-500"
+        style={{
+          background: `linear-gradient(0deg, ${activeItem.color}25 0%, ${activeItem.color}00 80%)`,
+          clipPath: 'polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%)',
+          filter: 'blur(8px)',
+        }}
+      />
+      <div 
+        className="absolute bottom-6 w-12 h-28 pointer-events-none transition-all duration-500 animate-pulse"
+        style={{
+          background: `linear-gradient(0deg, ${activeItem.color}35 0%, ${activeItem.color}00 100%)`,
+          clipPath: 'polygon(35% 0%, 65% 0%, 100% 100%, 0% 100%)',
+          filter: 'blur(4px)',
+        }}
+      />
+
+      {/* Floating Holographic Info */}
+      <motion.div
+        animate={{ y: [0, -5, 0] }}
+        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute top-4 flex flex-col items-center text-center z-10 w-full px-4"
+      >
+        {/* Rotating Magic Ring */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
+          className="w-12 h-12 rounded-full border border-dashed flex items-center justify-center mb-1"
+          style={{ borderColor: `${activeItem.color}40`, boxShadow: `0 0 10px ${activeItem.color}20` }}
+        >
+          <div className="w-8 h-8 rounded-full border border-double" style={{ borderColor: `${activeItem.color}25` }} />
+        </motion.div>
+
+        {/* Dynamic Hologram Stats */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeItem.id}
+            initial={{ opacity: 0, y: 5, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -5, scale: 0.95 }}
+            transition={{ duration: 0.25 }}
+            className="flex flex-col items-center"
+          >
+            <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border mb-1 font-mono"
+              style={{ color: activeItem.color, borderColor: `${activeItem.color}30`, background: `${activeItem.color}08` }}>
+              {activeItem.school} School
+            </span>
+            <span className="text-[10px] font-black uppercase text-white tracking-widest drop-shadow-[0_0_8px_rgba(255,255,255,0.4)] truncate max-w-[200px]">
+              {activeItem.spellName}
+            </span>
+            <span className="text-[8px] font-mono mt-0.5 text-white/50">
+              Mana Cost: <span className="font-bold" style={{ color: activeItem.color }}>{activeItem.manaCost}</span>
+            </span>
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
+
+      {/* Vector Open Grimoire Book */}
+      <div className="relative z-10 flex flex-col items-center">
+        <svg viewBox="0 0 100 60" className="w-20 h-12 transition-all duration-500" style={{ color: activeItem.color, filter: `drop-shadow(0 0 8px ${activeItem.color}40)` }} fill="currentColor">
+          {/* Left Page shadow/backing */}
+          <path d="M50,55 C35,50 15,50 5,53 L5,15 C15,12 35,12 50,17 Z" fill="rgba(0,0,0,0.4)" />
+          {/* Right Page shadow/backing */}
+          <path d="M50,55 C65,50 85,50 95,53 L95,15 C85,12 65,12 50,17 Z" fill="rgba(0,0,0,0.4)" />
+          
+          {/* Left Page Page */}
+          <path d="M50,53 C35,48 15,48 5,51 L5,13 C15,10 35,10 50,15 Z" fill="rgba(255,255,255,0.03)" stroke="currentColor" strokeWidth="1.2" />
+          {/* Right Page Page */}
+          <path d="M50,53 C65,48 85,48 95,51 L95,13 C85,10 65,10 50,15 Z" fill="rgba(255,255,255,0.03)" stroke="currentColor" strokeWidth="1.2" />
+          
+          {/* Book Spine */}
+          <line x1="50" y1="13" x2="50" y2="53" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          {/* Runic text lines left page */}
+          <path d="M12,20 C22,18 38,18 45,21 M12,28 C22,26 38,28 45,31 M12,36 C22,34 38,36 45,39 M12,44 C22,42 38,42 45,45" stroke="currentColor" strokeWidth="0.8" opacity="0.3" strokeDasharray="3 2" />
+          {/* Runic text lines right page */}
+          <path d="M88,20 C78,18 62,18 55,21 M88,28 C78,26 62,28 55,31 M88,36 C78,34 62,36 55,39 M88,44 C78,42 62,42 55,45" stroke="currentColor" strokeWidth="0.8" opacity="0.3" strokeDasharray="3 2" />
+        </svg>
+        <span className="text-[7px] font-mono uppercase tracking-widest text-white/30 mt-1">Active Grimoire</span>
+      </div>
+    </div>
+  )
+}
+
 // ══════════════════════════════════════════════════════════
 // ROOT APP
 // ══════════════════════════════════════════════════════════
@@ -2833,10 +3067,17 @@ function AppContent() {
   const [time, setTime] = useState('')
   const [activeTransition, setActiveTransition] = useState(null)
   const [pendingActive, setPendingActive] = useState(null)
+  const [selectedSchool, setSelectedSchool] = useState('All')
+
+  const filteredNav = useMemo(() => {
+    if (selectedSchool === 'All') return NAV
+    return NAV.filter(n => n.school === selectedSchool)
+  }, [selectedSchool])
 
   const triggerTransition = useCallback((targetId) => {
     let type = null
     if (targetId === 'quiz-revision') type = 'fire_slash'
+    else if (targetId === 'guilds') type = 'monarch_domain'
     else if (targetId === 'meditate') type = 'water_calm'
     else if (targetId === 'ai-planner') type = 'grimoire'
     else if (targetId === 'daily-plan') type = 'arise'
@@ -2932,6 +3173,7 @@ function AppContent() {
 
   const sections = {
     dashboard: <Dashboard stats={stats} refresh={loadStats} go={triggerTransition} />,
+    guilds: <GuildChamber stats={stats} refresh={loadStats} />,
     'quiz-revision': <QuizRevision refresh={loadStats} />,
     meditate: <Meditate refresh={loadStats} />,
     'ai-planner': <PremiumWrapper feature="ai-planner" onUpgrade={handleUpgrade}><AiPlanner /></PremiumWrapper>,
@@ -2964,18 +3206,31 @@ function AppContent() {
         {(mobileOpen || true) && (
           <motion.aside
             initial={false}
-            className={`${mobileOpen ? 'fixed inset-y-0 left-0 z-50' : 'hidden'} lg:flex lg:static w-64 shrink-0 glass-sidebar flex-col`}>
+            className={`${mobileOpen ? 'fixed inset-y-0 left-0 z-50 overflow-y-auto' : 'hidden'} lg:flex lg:static w-64 shrink-0 glass-sidebar flex-col relative lg:overflow-hidden`}
+            style={{
+              borderRight: '1px solid rgba(251, 191, 36, 0.15)',
+              boxShadow: 'inset -5px 0 25px rgba(0, 0, 0, 0.5)'
+            }}
+          >
+            {/* Golden corner grimoire accents */}
+            <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-amber-500/40 pointer-events-none z-10" />
+            <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-amber-500/40 pointer-events-none z-10" />
+            <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-amber-500/40 pointer-events-none z-10" />
+            <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-amber-500/40 pointer-events-none z-10" />
+
+            <SidebarManaParticles />
+
             {/* Logo */}
-            <div className="p-5 border-b border-white/5">
+            <div className="p-5 border-b border-white/5 relative z-10 shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl logo-pulse flex items-center justify-center"
-                    style={{ background: 'linear-gradient(135deg, #8b5cf6, #22d3ee)' }}>
-                    <Sparkles className="w-4 h-4 text-white" />
+                  <div className="w-9 h-9 rounded-xl logo-pulse flex items-center justify-center animate-pulse"
+                    style={{ background: 'linear-gradient(135deg, #fbbf24, #d97706)', boxShadow: '0 0 10px rgba(251,191,36,0.3)' }}>
+                    <Sparkles className="w-4 h-4 text-black" />
                   </div>
                   <div>
-                    <p className="font-black tracking-tight aurora-text text-base leading-none">LifeOS</p>
-                    <p className="text-[10px] text-white/30 mt-0.5">AI Growth System</p>
+                    <p className="font-black tracking-tight text-white text-base leading-none uppercase">GRIMOIRE</p>
+                    <p className="text-[10px] text-amber-500/80 font-mono tracking-widest mt-0.5">Spell Deck v1.0</p>
                   </div>
                 </div>
                 <button className="lg:hidden text-white/30 hover:text-white p-1" onClick={() => setMobileOpen(false)}>
@@ -2984,35 +3239,104 @@ function AppContent() {
               </div>
             </div>
 
+            {/* Holographic Projector */}
+            <HolographicProjector activeId={active} />
+
+            {/* Magic School Filter Buttons */}
+            <div className="p-3 border-b border-white/5 relative z-10">
+              <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+                {['All', 'Divination', 'Conjuration', 'Evocation', 'Restoration'].map((school) => {
+                  const isSel = selectedSchool === school
+                  return (
+                    <button
+                      key={school}
+                      onClick={() => setSelectedSchool(school)}
+                      className={`text-[8px] font-black uppercase tracking-wider px-2 py-1 rounded-md transition-all duration-300 border shrink-0
+                        ${isSel ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 font-black' : 'bg-transparent border-white/5 text-white/40 hover:text-white/70'}`}
+                      style={isSel ? { boxShadow: '0 0 8px rgba(245,158,11,0.2)' } : {}}
+                    >
+                      {school === 'All' ? 'All Arcana' : school}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             {/* Nav */}
-            <nav className="p-3 space-y-0.5 flex-1 overflow-y-auto">
-              {NAV.map(n => {
+            <nav className="p-3 space-y-2.5 flex-1 overflow-visible lg:overflow-y-auto relative z-10 scrollbar-thin">
+              {filteredNav.map(n => {
                 const isActive = active === n.id
                 return (
                   <motion.button key={n.id}
-                    whileHover={{ x: 3 }} whileTap={{ scale: 0.97 }}
-                    onClick={() => { triggerTransition(n.id); setMobileOpen(false) }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300
-                      ${isActive ? 'nav-item-active text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/4'}`}>
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all duration-300"
-                      style={isActive ? { background: `${n.color}20`, border: `1px solid ${n.color}30` } : { background: 'rgba(255,255,255,0.04)' }}>
-                      <n.icon className="w-3.5 h-3.5" style={isActive ? { color: n.color, filter: `drop-shadow(0 0 4px ${n.color})` } : {}} />
+                    whileHover={{ 
+                      scale: 1.02, 
+                      x: 4, 
+                      backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                      boxShadow: `0 0 12px ${n.color}15`,
+                      borderColor: `${n.color}30`
+                    }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={(e) => {
+                      fireFX('sidebarSelect', { x: e.clientX, y: e.clientY, color: n.color })
+                      triggerTransition(n.id)
+                      setMobileOpen(false)
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl border text-left transition-all duration-300 relative overflow-hidden
+                      ${isActive ? 'text-white font-bold bg-white/5' : 'text-white/40 hover:text-white/80'}`}
+                    style={{
+                      borderColor: isActive ? `${n.color}40` : 'rgba(255,255,255,0.03)',
+                      background: isActive ? `linear-gradient(90deg, ${n.color}08, transparent)` : 'transparent'
+                    }}
+                  >
+                    {/* Active dynamic runic ring highlight */}
+                    {isActive && (
+                      <motion.div 
+                        layoutId="activeRunicBorder"
+                        className="absolute left-0 top-0 bottom-0 w-1 rounded-full"
+                        style={{ backgroundColor: n.color, boxShadow: `0 0 10px ${n.color}` }}
+                      />
+                    )}
+                    
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 relative overflow-hidden"
+                      style={isActive ? { background: `${n.color}15`, border: `1px solid ${n.color}35`, boxShadow: `0 0 10px ${n.color}30` } : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <n.icon className="w-4 h-4" style={isActive ? { color: n.color, filter: `drop-shadow(0 0 4px ${n.color})` } : {}} />
                     </div>
-                    <span>{n.label}</span>
-                    {isActive && <ChevronRight className="w-3 h-3 ml-auto" style={{ color: n.color }} />}
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-black tracking-wide truncate">{n.label}</span>
+                        <span className="text-[7px] font-bold opacity-60 uppercase tracking-widest px-1.5 py-0.5 rounded border ml-2"
+                          style={{ color: n.color, borderColor: `${n.color}30`, background: `${n.color}08` }}>
+                          {n.manaCost}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center mt-0.5">
+                        <span className="text-[9px] font-mono opacity-50 truncate" style={{ color: isActive ? n.color : undefined }}>
+                          {n.spellName}
+                        </span>
+                        <span className="text-[7px] uppercase tracking-wider font-bold opacity-20">
+                          {n.school}
+                        </span>
+                      </div>
+                      {n.desc && (
+                        <div className="text-[8px] text-white/30 truncate mt-0.5 font-sans leading-none font-medium">
+                          {n.desc}
+                        </div>
+                      )}
+                    </div>
                   </motion.button>
                 )
               })}
             </nav>
 
             {/* Footer */}
-            <div className="p-4 border-t border-white/5 space-y-3">
+            <div className="p-4 border-t border-white/5 space-y-3 relative z-10">
               <div className="flex items-center justify-between text-xs text-white/25">
                 <div className="flex items-center gap-1.5">
-                  <Award className="w-3 h-3 text-violet-400" />
+                  <Award className="w-3 h-3 text-amber-500" />
                   <span>Build something great</span>
                 </div>
-                <span className="font-mono text-violet-400/60">{time}</span>
+                <span className="font-mono text-amber-500/60">{time}</span>
               </div>
               <Button
                 onClick={logout}

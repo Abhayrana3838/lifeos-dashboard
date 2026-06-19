@@ -45,6 +45,13 @@ const dateKey = (d) => new Date(d).toISOString().slice(0, 10)
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
 
+function maskName(name, userId) {
+  if (!name) return 'H-XX_0000'
+  const initials = name.split(' ').map(n => n[0]).filter(Boolean).join('').slice(0, 2).toUpperCase()
+  const shortId = (userId || 'xxxx').slice(0, 4)
+  return `H-${initials}_${shortId}`
+}
+
 // ── Authentication Helpers ───────────────────────────────────
 function generateToken(userId) {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' })
@@ -101,7 +108,7 @@ async function getStats(userId) {
     const dt = new Date(); dt.setDate(dt.getDate() - (29 - i)); return dt.toISOString().slice(0,10)
   })
 
-  const [studyLogs, habits, habitLogs, tasks, goals, journals, health, meditations] = await Promise.all([
+  const [studyLogs, habits, habitLogs, tasks, goals, journals, health, meditations, exercises, knowledge, dailyPlans, userChats] = await Promise.all([
     d.collection('study_logs').find({ userId }, { projection: { _id: 0 } }).toArray(),
     d.collection('habits').find({ userId }, { projection: { _id: 0 } }).toArray(),
     d.collection('habit_logs').find({ userId }, { projection: { _id: 0 } }).toArray(),
@@ -110,6 +117,10 @@ async function getStats(userId) {
     d.collection('journal').find({ userId }, { projection: { _id: 0 } }).toArray(),
     d.collection('health').find({ userId }, { projection: { _id: 0 } }).toArray(),
     d.collection('meditations').find({ userId }, { projection: { _id: 0 } }).toArray(),
+    d.collection('exercises').find({ userId }, { projection: { _id: 0 } }).toArray(),
+    d.collection('knowledge').find({ userId }, { projection: { _id: 0 } }).toArray(),
+    d.collection('daily_plans').find({ userId }, { projection: { _id: 0 } }).toArray(),
+    d.collection('guild_chat').find({ userId }, { projection: { _id: 0 } }).toArray(),
   ])
 
   const todayStudy     = studyLogs.filter(s => s.date === t).reduce((a,b) => a + Number(b.hours||0), 0)
@@ -199,6 +210,35 @@ async function getStats(userId) {
   const totalMeditationMinutes = meditations.reduce((a, b) => a + Number(b.duration || 0), 0)
   rawXp += totalMeditationMinutes * 10 // 10 XP per minute of meditation
 
+  // Logged Exercises/Workouts points
+  exercises.forEach(e => {
+    rawXp += (Number(e.sets || 0) * Number(e.reps || 0) * 3) + (Number(e.duration || 0) * 6)
+  })
+
+  // Logged Library items/Books points
+  rawXp += knowledge.length * 150
+
+  // Journal entries points
+  rawXp += journals.length * 200
+
+  // Health log entries points
+  rawXp += health.length * 75
+
+  // Daily plans completed checkpoints
+  dailyPlans.forEach(p => {
+    const doneCount = Object.values(p.completedItems || {}).filter(Boolean).length
+    rawXp += doneCount * 100
+  })
+
+  // Goals created and progress points
+  rawXp += goals.length * 100
+  goals.forEach(g => {
+    rawXp += (g.progress || 0) * 2
+  })
+
+  // Guild chat messages points
+  rawXp += (userChats?.length || 0) * 25
+
   // Mind Sharpness Calculation with Decay (decrement if discontinuous)
   // Base mind sharpness = 100. For each day of absence in last 14 days, subtract 10.
   let mindSharpness = 100
@@ -269,14 +309,20 @@ async function getStats(userId) {
   })
 
   const activities = [
-    ...studyLogs.slice(-10).map(s => ({ type: 'study', label: `Logged Training Session: ${s.subject} • ${s.topic || ''}`.trim(), time: s.createdAt, meta: `+${s.hours}h` })),
+    ...studyLogs.slice(-10).map(s => ({ type: 'study', label: `Logged Training Session: ${s.subject} • ${s.topic || ''}`.trim(), time: s.createdAt || s.date, meta: `+${s.hours}h` })),
     ...tasks.filter(t => t.status === 'done').slice(-10).map(x => ({ type: 'task', label: `Quest Completed: ${x.title}`, time: x.completedAt || x.createdAt })),
     ...habitLogs.slice(-10).map(h => {
       const habit = habits.find(x => x.id === h.habitId)
       return { type: 'habit', label: `Daily Action: ${habit?.name || 'Routine'}`, time: h.createdAt }
     }),
     ...meditations.slice(-10).map(m => ({ type: 'meditate', label: `Mana Alignment Meditation`, time: m.createdAt, meta: `${m.duration}m` })),
-  ].filter(x => x.time).sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0, 8)
+    ...exercises.slice(-10).map(e => ({ type: 'exercise', label: `Physical Training: ${e.name}`, time: e.createdAt || e.date, meta: `${e.sets || 0}x${e.reps || 0}` })),
+    ...knowledge.slice(-10).map(k => ({ type: 'knowledge', label: `Archived Knowledge: ${k.title}`, time: k.createdAt })),
+    ...journals.slice(-10).map(j => ({ type: 'journal', label: `Reflected in Hunter Journal`, time: j.createdAt || j.date })),
+    ...health.slice(-10).map(h => ({ type: 'health', label: `Registered Hunter Vitals`, time: h.createdAt || h.date })),
+    ...goals.slice(-10).map(g => ({ type: 'goal', label: `Set Milestone Quest: ${g.title}`, time: g.createdAt || g.deadline, meta: `${g.progress || 0}%` })),
+    ...(userChats || []).slice(-10).map(c => ({ type: 'chat', label: `Transmitted Raid Signal: ${c.msg}`, time: c.createdAt })),
+  ].filter(x => x.time).sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0, 10)
 
   return {
     today: t, todayStudy: +todayStudy.toFixed(2),
@@ -292,6 +338,28 @@ async function getStats(userId) {
       level,
       rank,
       rankColor,
+      // RPG Attributes
+      attributes: {
+        strength: 10 + Math.round((exercises.length * 2.5) + (tasksDone * 0.8)),
+        agility: 10 + Math.round((habitLogs.length * 0.6) + (streak * 1.5)),
+        intelligence: 10 + Math.round((totalHours * 1.5) + (knowledge.length * 4)),
+        vitality: 10 + Math.round((health.length * 2.5) + (sleepAvg * 1.5)),
+        sense: 10 + Math.round((totalMeditationMinutes / 5) + (journals.length * 3))
+      },
+      hunterClass: (() => {
+        const sVal = 10 + Math.round((exercises.length * 2.5) + (tasksDone * 0.8))
+        const aVal = 10 + Math.round((habitLogs.length * 0.6) + (streak * 1.5))
+        const iVal = 10 + Math.round((totalHours * 1.5) + (knowledge.length * 4))
+        const vVal = 10 + Math.round((health.length * 2.5) + (sleepAvg * 1.5))
+        const snVal = 10 + Math.round((totalMeditationMinutes / 5) + (journals.length * 3))
+        const maxVal = Math.max(sVal, aVal, iVal, vVal, snVal)
+        if (maxVal === 10) return 'Shadow Monarch'
+        if (maxVal === iVal) return 'Shadow Mage'
+        if (maxVal === sVal) return 'Vanguard Fighter'
+        if (maxVal === aVal) return 'Phantom Assassin'
+        if (maxVal === vVal) return 'Adamant Defender'
+        return 'Astral Seer'
+      })(),
       combatPower,
       mindSharpness,
       totalHours,
@@ -635,6 +703,146 @@ async function handler(request, { params }) {
     if (path === 'ai/chat'       && method === 'POST') return handleAIChat(body)
     if (path === 'ai/generate-quiz' && method === 'POST') return handleAIGenerateQuiz(body)
     if (path === 'ai/generate-daily-plan' && method === 'POST') return handleAIGenerateDailyPlan(body)
+
+    // GUILDS ROUTES
+    if (path === 'guilds/chat' && method === 'GET') {
+      if (!currentUser) return err('Unauthorized', 401)
+      const d = await db()
+      let chatLogs = await d.collection('guild_chat').find({}).sort({ createdAt: 1 }).toArray()
+
+      // Chat Simulator: If empty or last message is older than 25s, simulate a new hunter message
+      const lastMsg = chatLogs[chatLogs.length - 1]
+      const now = new Date()
+      if (!lastMsg || (now - new Date(lastMsg.createdAt)) > 25000) {
+        const botTemplates = [
+          { userId: 'bot_kahn', msg: 'Need a tank for the D-Rank Goblin gate! Immediate entry.', name: 'IronFist Kahn' },
+          { userId: 'bot_lina', msg: 'Ready to support. Clean records, B-rank healing certificate.', name: 'Healer Lina' },
+          { userId: 'bot_flam', msg: 'White Tiger Guild is recruiting active C-rank hunters. Drop your CP below.', name: 'Flame Wielder' },
+          { userId: 'bot_choi', msg: 'Hunters Guild S-rank raid starts in 30 minutes. Buffs active.', name: 'Guildmaster Choi' },
+          { userId: 'bot_shadow', msg: 'Boss room is locked. We need a magic division supporter.', name: 'X Shadow' },
+          { userId: 'bot_iron', msg: 'Help! Orc Lord is crushing our tank! Need immediate healer backing!', name: 'Iron Shield' },
+          { userId: 'bot_monarch', msg: 'Has anyone seen the boss room in the Jeju dungeon? It looks insane.', name: 'Shadow Monarch' }
+        ]
+        const pick = botTemplates[Math.floor(Math.random() * botTemplates.length)]
+        await d.collection('guild_chat').insertOne({
+          id: uuid(),
+          userId: pick.userId,
+          msg: pick.msg,
+          time: 'Just now',
+          createdAt: now.toISOString()
+        })
+        chatLogs = await d.collection('guild_chat').find({}).sort({ createdAt: 1 }).toArray()
+      }
+
+      // Keep only last 40 logs
+      if (chatLogs.length > 40) {
+        const idsToRemove = chatLogs.slice(0, chatLogs.length - 40).map(c => c.id)
+        await d.collection('guild_chat').deleteMany({ id: { $in: idsToRemove } })
+        chatLogs = chatLogs.slice(-40)
+      }
+
+      // Map users
+      const userIds = [...new Set(chatLogs.map(l => l.userId))].filter(id => !id.startsWith('bot_'))
+      const users = await d.collection('users').find({ id: { $in: userIds } }, { projection: { id: 1, name: 1 } }).toArray()
+      const userMap = {}
+      users.forEach(u => {
+        userMap[u.id] = u.id === currentUser.id ? `${u.name} (You)` : maskName(u.name, u.id)
+      })
+
+      // Map bots
+      const botNames = {
+        'bot_kahn': 'H-IK_kahn',
+        'bot_lina': 'H-HL_lina',
+        'bot_flam': 'H-FW_flam',
+        'bot_choi': 'H-GC_choi',
+        'bot_shadow': 'H-XS_shad',
+        'bot_iron': 'H-IS_iron',
+        'bot_monarch': 'H-SM_9999'
+      }
+
+      const enriched = chatLogs.map(l => ({
+        user: l.userId.startsWith('bot_') ? botNames[l.userId] : (userMap[l.userId] || 'H-UN_xxxx'),
+        msg: l.msg,
+        time: 'Just now',
+        userId: l.userId
+      }))
+
+      return ok(enriched)
+    }
+
+    if (path === 'guilds/chat' && method === 'POST') {
+      if (!currentUser) return err('Unauthorized', 401)
+      const { msg } = body
+      if (!msg) return err('Message is required')
+      const d = await db()
+      await d.collection('guild_chat').insertOne({
+        id: uuid(),
+        userId: currentUser.id,
+        msg,
+        time: 'Just now',
+        createdAt: new Date().toISOString()
+      })
+      return ok({ success: true })
+    }
+
+    if (path === 'guilds/leaderboard' && method === 'GET') {
+      if (!currentUser) return err('Unauthorized', 401)
+      const d = await db()
+      
+      // Check cache
+      const cached = await d.collection('leaderboard_cache').findOne({ id: 'cache' })
+      let cachedData = cached?.data
+      const cacheTime = cached?.updatedAt ? new Date(cached.updatedAt) : null
+      const now = new Date()
+      
+      // If cache does not exist or is older than 24 hours (1 day), recalculate
+      if (!cachedData || !cacheTime || (now - cacheTime) > 24 * 60 * 60 * 1000) {
+        const allUsers = await d.collection('users').find({}, { projection: { id: 1, name: 1 } }).toArray()
+        const leaderboard = []
+        for (const u of allUsers) {
+          const stats = await getStats(u.id)
+          const cp = stats?.gameStats?.combatPower || 150
+          const rnk = stats?.gameStats?.rank || 'E'
+          const color = stats?.gameStats?.rankColor || '#94a3b8'
+          leaderboard.push({
+            id: u.id,
+            userName: u.name,
+            cp,
+            rank: rnk,
+            color
+          })
+        }
+        
+        leaderboard.sort((a, b) => b.cp - a.cp)
+        
+        cachedData = leaderboard.map((item, idx) => ({
+          rank: idx + 1,
+          id: item.id,
+          userName: item.userName,
+          cp: item.cp,
+          hunterRank: `${item.rank}-Rank Hunter`,
+          color: item.color
+        }))
+        
+        await d.collection('leaderboard_cache').updateOne(
+          { id: 'cache' },
+          { $set: { data: cachedData, updatedAt: now.toISOString() } },
+          { upsert: true }
+        )
+      }
+
+      // Resolve personalized client names dynamically
+      const resolved = cachedData.map(item => ({
+        rank: item.rank,
+        name: item.id === currentUser.id ? `${currentUser.name} (You)` : maskName(item.userName, item.id),
+        cp: item.cp,
+        hunterRank: item.hunterRank,
+        color: item.color,
+        isYou: item.id === currentUser.id
+      }))
+
+      return ok(resolved)
+    }
 
     // STUDY LOGS
     if (path === 'study-logs' && method === 'GET') {
