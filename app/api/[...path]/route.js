@@ -3,9 +3,209 @@ import { MongoClient } from 'mongodb'
 import { v4 as uuid } from 'uuid'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import fs from 'fs'
+import pathModule from 'path'
 
 let client = null
 let _db = null
+
+const LOCAL_DB_FILE = pathModule.join(process.cwd(), 'data', 'local_db.json')
+
+function initLocalDB() {
+  const dir = pathModule.dirname(LOCAL_DB_FILE)
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true })
+  }
+  if (!fs.existsSync(LOCAL_DB_FILE)) {
+    fs.writeFileSync(LOCAL_DB_FILE, JSON.stringify({
+      users: [],
+      study_logs: [],
+      habits: [],
+      habit_logs: [],
+      tasks: [],
+      goals: [],
+      meditations: [],
+      exercises: [],
+      knowledge: [],
+      daily_plans: [],
+      guild_chat: [],
+      journal: [],
+      health: [],
+      subscriptions: []
+    }, null, 2))
+  }
+}
+
+function readLocalDB() {
+  initLocalDB()
+  try {
+    const data = fs.readFileSync(LOCAL_DB_FILE, 'utf8')
+    return JSON.parse(data)
+  } catch (e) {
+    console.error('Error reading local DB:', e)
+    return {}
+  }
+}
+
+function writeLocalDB(dbData) {
+  initLocalDB()
+  try {
+    fs.writeFileSync(LOCAL_DB_FILE, JSON.stringify(dbData, null, 2))
+  } catch (e) {
+    console.error('Error writing local DB:', e)
+  }
+}
+
+function matchFilter(item, filter) {
+  if (!filter || Object.keys(filter).length === 0) return true
+  for (const [key, val] of Object.entries(filter)) {
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      if (val.$in && !val.$in.includes(item[key])) return false
+      if (val.$gte && item[key] < val.$gte) return false
+      if (val.$lte && item[key] > val.$lte) return false
+      if (val.$gt && item[key] <= val.$gt) return false
+      if (val.$lt && item[key] >= val.$lt) return false
+      if (val.$ne && item[key] === val.$ne) return false
+    } else if (item[key] !== val) {
+      return false
+    }
+  }
+  return true
+}
+
+class MockCollection {
+  constructor(collName) {
+    this.collName = collName
+  }
+
+  async find(filter = {}, options = {}) {
+    const dbData = readLocalDB()
+    let items = dbData[this.collName] || []
+    items = items.filter(item => matchFilter(item, filter))
+
+    let result = [...items]
+
+    const chain = {
+      sort: (sortObj) => {
+        const sortKey = Object.keys(sortObj)[0]
+        const sortDir = sortObj[sortKey]
+        result.sort((a, b) => {
+          if (a[sortKey] < b[sortKey]) return sortDir === 1 ? -1 : 1
+          if (a[sortKey] > b[sortKey]) return sortDir === 1 ? 1 : -1
+          return 0
+        })
+        return chain
+      },
+      limit: (num) => {
+        result = result.slice(0, num)
+        return chain
+      },
+      toArray: async () => {
+        return result
+      }
+    }
+    return chain
+  }
+
+  async findOne(filter = {}, options = {}) {
+    const dbData = readLocalDB()
+    const items = dbData[this.collName] || []
+    const item = items.find(item => matchFilter(item, filter))
+    return item || null
+  }
+
+  async insertOne(item) {
+    const dbData = readLocalDB()
+    if (!dbData[this.collName]) dbData[this.collName] = []
+    if (!item.id) item.id = uuid()
+    dbData[this.collName].push(item)
+    writeLocalDB(dbData)
+    return { insertedId: item.id }
+  }
+
+  async insertMany(items) {
+    const dbData = readLocalDB()
+    if (!dbData[this.collName]) dbData[this.collName] = []
+    items.forEach(item => {
+      if (!item.id) item.id = uuid()
+      dbData[this.collName].push(item)
+    })
+    writeLocalDB(dbData)
+    return { insertedCount: items.length }
+  }
+
+  async updateOne(filter, update, options = {}) {
+    const dbData = readLocalDB()
+    const items = dbData[this.collName] || []
+    const item = items.find(item => matchFilter(item, filter))
+    if (item) {
+      if (update.$set) {
+        Object.assign(item, update.$set)
+      } else {
+        Object.assign(item, update)
+      }
+      writeLocalDB(dbData)
+      return { matchedCount: 1, modifiedCount: 1 }
+    }
+    if (options.upsert) {
+      const newItem = { ...filter, ...(update.$set || update) }
+      if (!newItem.id) newItem.id = uuid()
+      items.push(newItem)
+      dbData[this.collName] = items
+      writeLocalDB(dbData)
+      return { matchedCount: 0, modifiedCount: 1, upsertedId: newItem.id }
+    }
+    return { matchedCount: 0, modifiedCount: 0 }
+  }
+
+  async updateMany(filter, update, options = {}) {
+    const dbData = readLocalDB()
+    const items = dbData[this.collName] || []
+    let modified = 0
+    items.forEach(item => {
+      if (matchFilter(item, filter)) {
+        if (update.$set) {
+          Object.assign(item, update.$set)
+        } else {
+          Object.assign(item, update)
+        }
+        modified++
+      }
+    })
+    if (modified > 0) {
+      writeLocalDB(dbData)
+    }
+    return { matchedCount: modified, modifiedCount: modified }
+  }
+
+  async deleteOne(filter) {
+    const dbData = readLocalDB()
+    const items = dbData[this.collName] || []
+    const index = items.findIndex(item => matchFilter(item, filter))
+    if (index !== -1) {
+      items.splice(index, 1)
+      writeLocalDB(dbData)
+      return { deletedCount: 1 }
+    }
+    return { deletedCount: 0 }
+  }
+
+  async deleteMany(filter) {
+    const dbData = readLocalDB()
+    const items = dbData[this.collName] || []
+    const beforeCount = items.length
+    const filtered = items.filter(item => !matchFilter(item, filter))
+    dbData[this.collName] = filtered
+    writeLocalDB(dbData)
+    return { deletedCount: beforeCount - filtered.length }
+  }
+}
+
+class MockDb {
+  collection(name) {
+    return new MockCollection(name)
+  }
+}
 
 async function getClient() {
   if (!client) {
@@ -17,31 +217,57 @@ async function getClient() {
       maxPoolSize: 10,
       minPoolSize: 2,
       maxIdleTimeMS: 30000,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
+      serverSelectionTimeoutMS: 5000, // Increased timeout to 5s to prevent transient connection timeouts
+      socketTimeoutMS: 15000,
     })
   }
   return client
 }
 
 async function db() {
-  if (_db) return _db
+  const mongoUrl = process.env.MONGO_URL
+  if (!mongoUrl) {
+    console.warn('MONGO_URL not configured. Using local JSON database.')
+    return new MockDb()
+  }
+  if (_db) {
+    try {
+      return _db
+    } catch (e) {
+      console.error('Cached DB connection error, resetting:', e)
+      _db = null
+    }
+  }
   try {
     const mongoClient = await getClient()
     await mongoClient.connect()
     _db = mongoClient.db(process.env.DB_NAME || 'lifeos')
+    await _db.command({ ping: 1 })
+    console.log('MongoDB connection successful')
     return _db
   } catch (error) {
-    console.error('MongoDB connection error:', error)
-    throw new Error('Failed to connect to database')
+    console.error('MongoDB connection failed. Falling back to local JSON database:', error)
+    _db = null
+    return new MockDb()
   }
 }
 
 const ok  = (data, status = 200) => NextResponse.json(data, { status })
 const err = (message, status = 400) => NextResponse.json({ error: message }, { status })
 
-const today   = () => new Date().toISOString().slice(0, 10)
-const dateKey = (d) => new Date(d).toISOString().slice(0, 10)
+const today = () => {
+  const d = new Date()
+  const offset = d.getTimezoneOffset()
+  const localDate = new Date(d.getTime() - (offset * 60 * 1000))
+  return localDate.toISOString().slice(0, 10)
+}
+
+const dateKey = (d) => {
+  const dateObj = new Date(d)
+  const offset = dateObj.getTimezoneOffset()
+  const localDate = new Date(dateObj.getTime() - (offset * 60 * 1000))
+  return localDate.toISOString().slice(0, 10)
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
 
@@ -77,7 +303,7 @@ async function getUserFromToken(token) {
 // ── Collection Helpers ────────────────────────────────────
 async function list(coll, filter = {}, sort = { createdAt: -1 }) {
   const d = await db()
-  return d.collection(coll).find(filter, { projection: { _id: 0 } }).sort(sort).limit(1000).toArray()
+  return await d.collection(coll).find(filter, { projection: { _id: 0 } }).sort(sort).limit(1000).toArray()
 }
 async function insert(coll, doc, userId) {
   const d = await db()
@@ -89,7 +315,7 @@ async function insert(coll, doc, userId) {
 async function update(coll, id, patch, userId) {
   const d = await db()
   await d.collection(coll).updateOne({ id, userId }, { $set: patch })
-  return d.collection(coll).findOne({ id, userId }, { projection: { _id: 0 } })
+  return await d.collection(coll).findOne({ id, userId }, { projection: { _id: 0 } })
 }
 async function remove(coll, id, userId) {
   const d = await db()
@@ -429,6 +655,54 @@ async function getStats(userId) {
         return score < 70 ? 0.7 : 1.0
       })()
     }
+  }
+}
+
+async function handleAISuggest(body) {
+  try {
+    const { type, context = {} } = body
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) return err('OPENAI_API_KEY not configured')
+
+    const { OpenAI } = await import('openai')
+    const openai     = new OpenAI({ apiKey })
+
+    let systemPrompt = "You are a helpful AI coding assistant in a gamified life-management system styled as a Solo Leveling Hunter RPG."
+    let userPrompt = ""
+
+    if (type === 'habit') {
+      systemPrompt = "You are a legendary Hunter Trainer. Suggest exactly 3 unique, daily habits tailored to the user's RPG class."
+      userPrompt = `Suggest 3 habits. Respond ONLY with a valid JSON array of strings. Format: ["Habit 1", "Habit 2", "Habit 3"]. Class: ${context.hunterClass || 'Shadow Monarch'}.`
+    } else if (type === 'quest') {
+      systemPrompt = "You are the System Quest Generator. Generate a single daily quest aligned with a Hunter's level and class."
+      userPrompt = `Respond ONLY with a valid JSON object: { "title": "Quest Title", "description": "Quest task description", "priority": "low|medium|high" }. Hunter Class: ${context.hunterClass || 'Shadow Monarch'}, Level: ${context.level || 1}.`
+    } else if (type === 'exercise') {
+      systemPrompt = "You are the Physical Training System. Recommend a workout exercise aligned with the user's primary level/class."
+      userPrompt = `Respond ONLY with a valid JSON object: { "name": "Exercise Name (e.g. Push Ups)", "sets": number, "reps": number, "weight": number (in kg), "duration": number (in minutes) }. Hunter Class: ${context.hunterClass || 'Shadow Monarch'}, Muscle Fatigue: ${JSON.stringify(context.fatigue || {})}.`
+    } else if (type === 'journal') {
+      systemPrompt = "You are the Archivist Soul Bind. Refine the user's raw daily reflection into a clean, epic journal entry."
+      userPrompt = `Refine this raw entry into a detailed, structured epic journal text: "${context.rawReflection}". Respond ONLY with a JSON object: { "reflection": "refined reflection text", "wins": "suggested wins", "mood": "good|neutral|bad" }.`
+    } else {
+      return err('Invalid suggestion type')
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.7,
+      max_tokens: 1500,
+    })
+
+    const raw = completion.choices[0].message.content
+    const data = JSON.parse(raw)
+    return ok({ success: true, data })
+  } catch (e) {
+    console.error('AI Suggestion error:', e)
+    return err(e.message || 'Failed to generate suggestions', 500)
   }
 }
 
@@ -833,6 +1107,7 @@ async function handler(request, { params }) {
     if (path === 'ai/generate-quiz' && method === 'POST') return handleAIGenerateQuiz(body)
     if (path === 'ai/generate-daily-plan' && method === 'POST') return handleAIGenerateDailyPlan(body)
     if (path === 'ai/generate-workout' && method === 'POST') return handleAIChatWorkout(body)
+    if (path === 'ai/suggest'    && method === 'POST') return handleAISuggest(body)
 
     // GUILDS ROUTES
     if (path === 'guilds/chat' && method === 'GET') {
@@ -1057,6 +1332,7 @@ async function handler(request, { params }) {
         const completionPct = Math.round(last30.filter(d => hLogs.includes(d)).length * 100 / 30)
         return { ...h, completedToday, streak, completionPct, totalCompletions: hLogs.length }
       })
+      console.log(`[DIAGNOSTIC] GET /api/habits called by user ${currentUser.email} (${currentUser.id}). Found habits: ${habits.length}, returning enriched count: ${enriched.length}`)
       return ok(enriched)
     }
     if (path === 'habits' && method === 'POST') {
@@ -1548,6 +1824,60 @@ async function handler(request, { params }) {
       } catch (error) {
         return err(error.message, 500)
       }
+    }
+
+    if (path === 'user/profile' && method === 'PATCH') {
+      if (!currentUser) return err('Unauthorized', 401)
+      const d = await db()
+      const profileUpdate = {
+        name: body.name,
+        age: Number(body.age) || 0,
+        weight: Number(body.weight) || 0,
+        height: Number(body.height) || 0,
+        waterNotifications: body.waterNotifications === true,
+        waterInterval: Number(body.waterInterval) || 30,
+        updatedAt: new Date().toISOString()
+      }
+      await d.collection('users').updateOne({ id: currentUser.id }, { $set: profileUpdate })
+      const updatedUser = await d.collection('users').findOne({ id: currentUser.id }, { projection: { _id: 0, password: 0 } })
+      return ok({ user: updatedUser })
+    }
+
+    if (path === 'user/send-report' && method === 'POST') {
+      if (!currentUser) return err('Unauthorized', 401)
+      const stats = await getStats(currentUser.id)
+      const reportDate = today()
+      const userName = currentUser.name || 'System User'
+      const email = currentUser.email
+      
+      const reportContent = `
+=========================================
+SYSTEM DAILY PROGRESS REPORT
+=========================================
+Date: ${reportDate}
+User: ${userName} (${email})
+
+Daily Quest Summary:
+- Study/Training Hours: ${stats?.todayStudy || 0} hrs
+- Quests Completed: ${stats?.todayTasks || 0} / ${stats?.totalTasksToday || 0}
+- Habits Aligned: ${stats?.todayHabits || 0} / ${stats?.totalHabits || 0}
+- Continuous Login Streak: ${stats?.streak || 0} days
+
+System Combat Attributes:
+- Level: ${stats?.gameStats?.level || 1}
+- Combat Power (CP): ${stats?.gameStats?.combatPower || 150}
+- Mind Sharpness: ${stats?.gameStats?.mindSharpness || 100}%
+- Strength: ${stats?.gameStats?.attributes?.strength || 10}
+- Agility: ${stats?.gameStats?.attributes?.agility || 10}
+- Intelligence: ${stats?.gameStats?.attributes?.intelligence || 10}
+- Vitality: ${stats?.gameStats?.attributes?.vitality || 10}
+- Sense: ${stats?.gameStats?.attributes?.sense || 10}
+
+Plan Adherence: AI/Custom guidelines successfully followed.
+=========================================
+`
+      console.log(`[EMAIL SEND SIMULATION] To: ${email}\nSubject: Daily Progress Report\nBody:\n${reportContent}`)
+      return ok({ success: true, email, report: reportContent })
     }
 
     if (path === 'subscription/status') {

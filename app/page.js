@@ -81,9 +81,48 @@ const NAV = [
   { id: 'time-river', label: 'Time River', spellName: 'Chrono-Flux Stream', manaCost: '55 MP', school: 'Conjuration', icon: Waves, color: '#38bdf8', premium: 'time-river', desc: 'Weekly and monthly time stream breakdown' },
   { id: 'knowledge-fractal', label: 'Knowledge Fractal', spellName: 'Infinite Recur Sigil', manaCost: '80 MP', school: 'Conjuration', icon: Infinity, color: '#fbbf24', premium: 'knowledge-fractal', desc: 'Fractal geometry representing learning depth' },
   { id: 'predictive-future', label: 'Predictive Future', spellName: 'Temporal Foresight', manaCost: '90 MP', school: 'Divination', icon: Compass, color: '#4ade80', premium: 'predictive-future', desc: 'Forecast consistency and focus trends' },
+  { id: 'settings', label: 'Settings Console', spellName: 'System Calibration', manaCost: 'Free', school: 'Restoration', icon: User, color: '#a78bfa', desc: 'Manage user profiles, health specs, and email report triggers' }
 ]
 
 const CHART_COLORS = ['#8b5cf6', '#22d3ee', '#34d399', '#f472b6', '#fbbf24', '#f87171', '#a78bfa', '#38bdf8']
+
+const NAV_CATEGORIES = [
+  {
+    title: "Core System",
+    color: "#22d3ee",
+    ids: ['dashboard', 'daily-plan', 'guilds']
+  },
+  {
+    title: "Training Chamber",
+    color: "#a78bfa",
+    ids: ['exercise', 'meditate', 'quiz-revision', 'health']
+  },
+  {
+    title: "Quests & Habits",
+    color: "#fbbf24",
+    ids: ['tasks', 'habits', 'goals']
+  },
+  {
+    title: "Intellect & Reflection",
+    color: "#38bdf8",
+    ids: ['journal', 'knowledge', 'study']
+  },
+  {
+    title: "Arcane Systems (Premium)",
+    color: "#8b5cf6",
+    ids: [
+      'ai-planner', 'analytics', 'constellation', 'neural-network', 
+      'knowledge-galaxy', 'growth-tree', 'evolution', 
+      'digital-brain', 'time-river', 'knowledge-fractal', 
+      'predictive-future'
+    ]
+  },
+  {
+    title: "System Config",
+    color: "#94a3b8",
+    ids: ['settings', 'pricing']
+  }
+]
 
 const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('token') : null)
 
@@ -112,7 +151,12 @@ const api = {
 
 
 const fmtDate = (d) => new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric' })
-const todayISO = () => new Date().toISOString().slice(0, 10)
+const todayISO = () => {
+  const d = new Date()
+  const offset = d.getTimezoneOffset()
+  const localDate = new Date(d.getTime() - (offset * 60 * 1000))
+  return localDate.toISOString().slice(0, 10)
+}
 
 function greet() {
   const h = new Date().getHours()
@@ -382,6 +426,16 @@ function Dashboard({ stats, refresh, go }) {
               <h2 className="text-4xl font-black text-white mt-1 hunter-title-glow tracking-tighter filter drop-shadow-[0_0_8px_rgba(34,211,238,0.4)]">
                 {g.combatPower.toLocaleString()}
               </h2>
+            </div>
+
+            {/* Streak Gauge Indicator */}
+            <div className="flex justify-between items-center text-[10px] font-mono border-b border-cyan-500/20 pb-2.5 mb-3">
+              <span className="text-amber-400 flex items-center gap-1.5 font-bold">
+                <Flame className="w-3.5 h-3.5 text-amber-500 animate-pulse" /> SYSTEM STREAK
+              </span>
+              <span className="text-amber-400 font-black text-xs px-2 py-0.5 rounded border border-amber-500/30 shadow-[0_0_6px_rgba(245,158,11,0.2)]">
+                {stats.streak} DAYS ACTIVE
+              </span>
             </div>
 
             {/* Attributes Grid */}
@@ -1159,118 +1213,117 @@ function StudyTracker({ refresh }) {
 function Habits({ refresh }) {
   const [habits, setHabits] = useState([])
   const [open, setOpen] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({ name: '', target: 'daily' })
-  const load = () => api.get('habits').then(setHabits)
-  useEffect(() => { load() }, [])
+  const [form, setForm] = useState({ name: '' })
 
-  const submit = async () => {
-    if (!form.name) return toast.error('Name required')
-    if (editingId) {
-      await api.patch(`habits/${editingId}`, form)
-      toast.success('Habit updated ✓')
-    } else {
-      await api.post('habits', form)
-      toast.success('Habit created ✓')
+  const loadHabits = async () => {
+    try {
+      const data = await api.get('habits')
+      setHabits(Array.isArray(data) ? data : [])
+    } catch (e) {
+      console.error('Failed to load habits:', e)
+      setHabits([])
     }
-    setOpen(false)
-    setEditingId(null)
-    setForm({ name: '', target: 'daily' })
-    load(); refresh()
   }
-  const startEdit = (h) => {
-    setEditingId(h.id)
-    setForm({ name: h.name, target: h.target })
-    setOpen(true)
+
+  useEffect(() => {
+    loadHabits()
+  }, [])
+
+  const createHabit = async () => {
+    if (!form.name.trim()) return
+    try {
+      await api.post('habits', { name: form.name, target: 'daily' })
+      setForm({ name: '' })
+      setOpen(false)
+      loadHabits()
+      refresh()
+      toast.success('Habit created!')
+    } catch (e) {
+      toast.error('Failed to create habit')
+    }
   }
-  const toggle = async (id, evt) => {
-    await api.post(`habits/${id}/toggle`, {})
-    load()
-    refresh()
-    if (evt) fireFX('habitToggle', { x: evt.clientX, y: evt.clientY })
+
+  const toggleHabit = async (id) => {
+    try {
+      await api.post(`habits/${id}/toggle`, {})
+      loadHabits()
+      refresh()
+    } catch (e) {
+      toast.error('Failed to toggle habit')
+    }
   }
-  const del = async (id) => { await api.del(`habits/${id}`); load(); refresh() }
+
+  const deleteHabit = async (id) => {
+    try {
+      await api.del(`habits/${id}`)
+      loadHabits()
+      refresh()
+      toast.success('Habit deleted')
+    } catch (e) {
+      toast.error('Failed to delete habit')
+    }
+  }
 
   return (
-    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
-      <SectionHeader title="Habit Tracker" desc="Build streaks. Stay consistent. Win every day." action={
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditingId(null); setForm({ name: '', target: 'daily' }) } }}>
-          <DialogTrigger asChild><GlowButton onClick={() => { setEditingId(null); setForm({ name: '', target: 'daily' }) }}><Plus className="w-4 h-4" /> New Habit</GlowButton></DialogTrigger>
-          <DialogContent style={{ background: 'rgba(10,8,20,0.95)', border: '1px solid rgba(139,92,246,0.2)', backdropFilter: 'blur(40px)' }}>
-            <DialogHeader><DialogTitle className="aurora-text">{editingId ? 'Edit Habit' : 'Create Habit'}</DialogTitle></DialogHeader>
-            <Field label="Habit Name"><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Meditate 10 min" /></Field>
-            <Field label="Frequency">
-              <Select value={form.target} onValueChange={v => setForm({ ...form, target: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="daily">Daily</SelectItem><SelectItem value="weekly">Weekly</SelectItem></SelectContent>
-              </Select>
-            </Field>
-            <DialogFooter><GlowButton onClick={submit}>{editingId ? 'Update' : 'Create'}</GlowButton></DialogFooter>
-          </DialogContent>
-        </Dialog>
-      } />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-white">Habit Tracker</h2>
+        <button onClick={() => setOpen(true)} className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700">
+          + New Habit
+        </button>
+      </div>
+
+      {open && (
+        <div className="glass-card rounded-2xl p-6">
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Enter habit name..."
+            className="w-full px-4 py-2 bg-black/40 text-white rounded-lg border border-white/10 focus:border-violet-500 outline-none"
+          />
+          <div className="flex gap-2 mt-4">
+            <button onClick={createHabit} className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700">
+              Create
+            </button>
+            <button onClick={() => setOpen(false)} className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {habits.length === 0 ? (
-        <motion.div variants={fadeUp} className="glass-card rounded-3xl p-16 text-center">
-          <Activity className="w-14 h-14 mx-auto text-white/10 mb-4" />
-          <p className="text-white/40">No habits yet. Build your first one.</p>
-        </motion.div>
+        <div className="glass-card rounded-2xl p-12 text-center">
+          <p className="text-white/40">No habits yet. Create your first habit!</p>
+        </div>
       ) : (
-        <motion.div variants={stagger} className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {habits.map((h, i) => {
-            const pct = h.completionPct || 0
-            const circ = 2 * Math.PI * 40
-            const offset = circ - (pct / 100) * circ
-            return (
-              <motion.div key={h.id} variants={scaleIn} layout>
-                <div className={`glass-card rounded-2xl p-5 group relative overflow-hidden transition-all duration-500 ${h.completedToday ? 'neon-border-violet' : ''}`}>
-                  {h.completedToday && <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 80% 60% at 50% -20%, rgba(139,92,246,0.08), transparent)' }} />}
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="font-bold text-white">{h.name}</h3>
-                      <p className="text-xs text-white/30 mt-0.5 capitalize">{h.target}</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => startEdit(h)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-cyan-400 hover:bg-cyan-400/10 transition-all edit-btn">
-                        <NotebookPen className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => del(h.id)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-all delete-btn">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <Flame className="w-4 h-4" style={{ color: '#fbbf24', filter: 'drop-shadow(0 0 6px #fbbf24)' }} />
-                      <span className="font-black text-white">{h.streak}</span>
-                      <span className="text-white/30 text-xs">day streak</span>
-                    </div>
-                    <svg width="64" height="64" className="ring-glow -rotate-90">
-                      <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="5" />
-                      <circle cx="32" cy="32" r="26" fill="none" stroke="#8b5cf6" strokeWidth="5"
-                        strokeDasharray={`${2 * Math.PI * 26}`}
-                        strokeDashoffset={`${2 * Math.PI * 26 - (pct / 100) * 2 * Math.PI * 26}`}
-                        strokeLinecap="round"
-                        style={{ transition: 'stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1)' }} />
-                      <text x="32" y="36" textAnchor="middle" fill="#a78bfa" fontSize="11" fontWeight="bold" className="rotate-90" style={{ transform: 'rotate(90deg)', transformOrigin: '32px 32px' }}>
-                        {pct}%
-                      </text>
-                    </svg>
-                  </div>
-                  <button onClick={(e) => toggle(h.id, e)} className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2
-                    ${h.completedToday ? 'text-white' : 'text-white/50 hover:text-white/80'}`}
-                    style={h.completedToday
-                      ? { background: 'rgba(139,92,246,0.3)', border: '1px solid rgba(139,92,246,0.4)', boxShadow: '0 0 20px rgba(139,92,246,0.2)' }
-                      : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    {h.completedToday ? <><CheckCircle2 className="w-4 h-4" /> Done Today</> : <><Circle className="w-4 h-4" /> Mark Done</>}
-                  </button>
-                </div>
-              </motion.div>
-            )
-          })}
-        </motion.div>
+        <div className="grid gap-4">
+          {habits.map((habit) => (
+            <div key={habit.id} className="glass-card rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-white">{habit.name}</h3>
+                <p className="text-sm text-white/40">Streak: {habit.streak || 0} days</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => toggleHabit(habit.id)}
+                  className={`px-4 py-2 rounded-lg ${habit.completedToday ? 'bg-green-600' : 'bg-white/10'} text-white`}
+                >
+                  {habit.completedToday ? '✓ Done' : 'Mark Done'}
+                </button>
+                <button
+                  onClick={() => deleteHabit(habit.id)}
+                  className="px-3 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
-    </motion.div>
+    </div>
   )
 }
 
@@ -1283,8 +1336,30 @@ function Tasks({ refresh }) {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ title: '', description: '', priority: 'medium', category: 'general', dueDate: todayISO(), type: 'daily' })
   const [filter, setFilter] = useState('all')
+  const [suggestingQuest, setSuggestingQuest] = useState(false)
+
   const load = () => api.get('tasks').then(setTasks)
   useEffect(() => { load() }, [])
+
+  const generateAIQuest = async () => {
+    setSuggestingQuest(true)
+    try {
+      const res = await api.post('ai/suggest', { type: 'quest', context: { hunterClass: 'Shadow Monarch', level: 5 } })
+      if (res.success && res.data) {
+        setForm({
+          ...form,
+          title: res.data.title || '',
+          description: res.data.description || '',
+          priority: res.data.priority || 'medium'
+        })
+        toast.success('AI daily quest generated successfully! ⚔️')
+      }
+    } catch {
+      toast.error('AI Quest generation failed')
+    } finally {
+      setSuggestingQuest(false)
+    }
+  }
 
   const submit = async () => {
     if (!form.title) return toast.error('Title required')
@@ -1333,8 +1408,17 @@ function Tasks({ refresh }) {
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditingId(null); setForm({ title: '', description: '', priority: 'medium', category: 'general', dueDate: todayISO(), type: 'daily' }) } }}>
           <DialogTrigger asChild><GlowButton onClick={() => { setEditingId(null); setForm({ title: '', description: '', priority: 'medium', category: 'general', dueDate: todayISO(), type: 'daily' }) }}><Plus className="w-4 h-4" /> New Task</GlowButton></DialogTrigger>
           <DialogContent style={{ background: 'rgba(10,8,20,0.95)', border: '1px solid rgba(139,92,246,0.2)', backdropFilter: 'blur(40px)' }}>
-            <DialogHeader><DialogTitle className="aurora-text">{editingId ? 'Edit Task' : 'Create Task'}</DialogTitle></DialogHeader>
-            <Field label="Title"><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></Field>
+            <DialogHeader>
+              <div className="flex justify-between items-center pr-6">
+                <DialogTitle className="aurora-text">{editingId ? 'Edit Task' : 'Create Task'}</DialogTitle>
+                {!editingId && (
+                  <GlowButton onClick={generateAIQuest} disabled={suggestingQuest} variant="ghost" className="text-[10px] border-violet-500/20 py-1">
+                    {suggestingQuest ? 'Generating...' : '✨ Generate AI Quest'}
+                  </GlowButton>
+                )}
+              </div>
+            </DialogHeader>
+            <Field label="Title"><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="bg-black/40 text-white border-white/10" /></Field>
             <Field label="Description"><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Priority">
@@ -2280,6 +2364,36 @@ function Exercise({ refresh }) {
   const [hoveredMuscle, setHoveredMuscle] = useState(null)
   const [activeSession, setActiveSession] = useState(null)
   const [bodyView, setBodyView] = useState('front')
+  const [suggestingWorkout, setSuggestingWorkout] = useState(false)
+
+  const askAIWorkout = async () => {
+    setSuggestingWorkout(true)
+    try {
+      const res = await api.post('ai/suggest', {
+        type: 'exercise',
+        context: {
+          hunterClass: 'Shadow Monarch',
+          fatigue: stats?.gameStats?.muscleFatigue || {}
+        }
+      })
+      if (res.success && res.data) {
+        setForm({
+          ...form,
+          name: res.data.name || '',
+          sets: res.data.sets || 3,
+          reps: res.data.reps || 10,
+          weight: res.data.weight || 0,
+          duration: res.data.duration || 10,
+          calories: (res.data.sets || 3) * (res.data.reps || 10) * 0.4
+        })
+        toast.success('Workout recommendation applied! 🏋️')
+      }
+    } catch {
+      toast.error('AI suggestion failed')
+    } finally {
+      setSuggestingWorkout(false)
+    }
+  }
 
   const load = () => {
     api.get('exercises').then(setItems)
@@ -2714,10 +2828,17 @@ function Exercise({ refresh }) {
             <div className="lg:col-span-2 flex flex-col gap-4">
               {/* Log form */}
               <div className="rounded-3xl p-5 flex-1" style={{ background:'linear-gradient(135deg, #080c14, #0a0a12)', border:'1px solid rgba(255,255,255,0.06)' }}>
-                <h3 className="text-sm font-black text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <div className="w-1.5 h-5 rounded-full" style={{ background:'linear-gradient(180deg, #06b6d4, #8b5cf6)' }} />
-                  {editingId ? 'Edit Exercise' : 'Log Exercise'}
-                </h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                    <div className="w-1.5 h-5 rounded-full" style={{ background:'linear-gradient(180deg, #06b6d4, #8b5cf6)' }} />
+                    {editingId ? 'Edit Exercise' : 'Log Exercise'}
+                  </h3>
+                  {!editingId && (
+                    <GlowButton onClick={askAIWorkout} disabled={suggestingWorkout} variant="ghost" className="text-[9px] uppercase tracking-widest border-violet-500/20 py-1">
+                      {suggestingWorkout ? 'Recommending...' : '✨ Ask AI Recommendation'}
+                    </GlowButton>
+                  )}
+                </div>
                 <div className="space-y-2.5">
                   <div>
                     <label className="text-[9px] font-black uppercase tracking-widest mb-1 block" style={{ color:'rgba(255,255,255,0.35)' }}>Exercise Name</label>
@@ -2933,8 +3054,34 @@ function Journal({ refresh }) {
   const [entries, setEntries] = useState([])
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ date: todayISO(), reflection: '', wins: '', mistakes: '', lessons: '', mood: 'good', energy: 5, tomorrowPlan: '' })
+  const [refining, setRefining] = useState(false)
+
   const load = () => api.get('journal').then(setEntries)
   useEffect(() => { load() }, [])
+
+  const refineJournal = async () => {
+    if (!form.reflection) return toast.error('Please write some raw notes first')
+    setRefining(true)
+    try {
+      const res = await api.post('ai/suggest', {
+        type: 'journal',
+        context: { rawReflection: form.reflection }
+      })
+      if (res.success && res.data) {
+        setForm({
+          ...form,
+          reflection: res.data.reflection || form.reflection,
+          wins: res.data.wins || form.wins,
+          mood: res.data.mood || form.mood
+        })
+        toast.success('Journal entry refined by AI! 🖋️')
+      }
+    } catch {
+      toast.error('AI refinement failed')
+    } finally {
+      setRefining(false)
+    }
+  }
 
   const submit = async () => {
     if (!form.reflection && !form.wins) return toast.error('Write something first')
@@ -3006,9 +3153,12 @@ function Journal({ refresh }) {
           </div>
           <Field label="📋 Tomorrow's Plan"><Textarea rows={2} value={form.tomorrowPlan} onChange={e => setForm({ ...form, tomorrowPlan: e.target.value })} /></Field>
         </div>
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex gap-2 flex-wrap">
           <GlowButton onClick={submit}>
             {editingId ? 'Update Entry' : <><Plus className="w-4 h-4" /> Save Entry</>}
+          </GlowButton>
+          <GlowButton variant="ghost" onClick={refineJournal} disabled={refining} className="border-violet-500/20">
+            {refining ? 'Refining...' : '🔮 Refine with AI'}
           </GlowButton>
           {editingId && (
             <GlowButton variant="ghost" onClick={() => {
@@ -4215,10 +4365,8 @@ function SidebarContent({
   setMobileOpen,
   desktopCollapsed,
   setDesktopCollapsed,
+  setGrimoireExpanded,
   active,
-  selectedSchool,
-  setSelectedSchool,
-  filteredNav,
   triggerTransition,
   time,
   logout,
@@ -4243,13 +4391,13 @@ function SidebarContent({
               <Sparkles className="w-4 h-4 text-black" />
             </div>
             <div>
-              <p className="font-black tracking-tight text-white text-base leading-none uppercase">GRIMOIRE</p>
-              <p className="text-[10px] text-amber-500/80 font-mono tracking-widest mt-0.5">Spell Deck v1.0</p>
+              <p className="font-black tracking-tight text-white text-base leading-none uppercase">SYSTEM PANEL</p>
+              <p className="text-[10px] text-amber-500/80 font-mono tracking-widest mt-0.5">Active Control Center</p>
             </div>
           </div>
           {/* Desktop Collapse button */}
           <button 
-            className="hidden lg:block text-white/30 hover:text-amber-400 p-1 ml-auto transition-colors cursor-pointer group" 
+            className="hidden lg:block text-white/30 hover:text-amber-400 p-1 ml-auto transition-colors cursor-pointer group animate-pulse" 
             onClick={() => setDesktopCollapsed(true)}
             title="Collapse Sidebar"
           >
@@ -4262,101 +4410,87 @@ function SidebarContent({
         </div>
       </div>
 
-      {/* Holographic Projector */}
-      <HolographicProjector activeId={active} />
-
-      {/* Magic School Filter Buttons */}
-      <div className="p-3 border-b border-white/5 relative z-10">
-        <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
-          {['All', 'Divination', 'Conjuration', 'Evocation', 'Restoration'].map((school) => {
-            const isSel = selectedSchool === school
-            return (
-              <button
-                key={school}
-                onClick={() => setSelectedSchool(school)}
-                className={`text-[8px] font-black uppercase tracking-wider px-2 py-1 rounded-md transition-all duration-300 border shrink-0
-                  ${isSel ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 font-black' : 'bg-transparent border-white/5 text-white/40 hover:text-white/70'}`}
-                style={isSel ? { boxShadow: '0 0 8px rgba(245,158,11,0.2)' } : {}}
-              >
-                {school === 'All' ? 'All Arcana' : school}
-              </button>
-            )
-          })}
-        </div>
+      {/* Expand Grimoire Deck Button */}
+      <div className="p-3 border-b border-white/5 relative z-10 shrink-0">
+        <button
+          onClick={() => setGrimoireExpanded(true)}
+          className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all duration-300 border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:shadow-[0_0_25px_rgba(245,158,11,0.4)]"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+          <span>🔮 Expand System Panel</span>
+        </button>
       </div>
 
       {/* Nav */}
-      <nav className="p-3 space-y-2.5 flex-1 overflow-visible lg:overflow-y-auto relative z-10 scrollbar-thin">
-        {filteredNav.map(n => {
-          const isActive = active === n.id
+      <nav className="p-3 space-y-4.5 flex-1 overflow-y-auto relative z-10 scrollbar-thin">
+        {NAV_CATEGORIES.map(cat => {
+          const catItems = NAV.filter(item => cat.ids.includes(item.id))
           return (
-            <motion.button key={n.id}
-              whileHover={{ 
-                scale: 1.02, 
-                x: 4, 
-                backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                boxShadow: `0 0 12px ${n.color}15`,
-                borderColor: `${n.color}30`
-              }}
-              whileTap={{ scale: 0.98 }}
-              onClick={(e) => {
-                fireFX('sidebarSelect', { x: e.clientX, y: e.clientY, color: n.color })
-                triggerTransition(n.id)
-                setMobileOpen(false)
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl border text-left transition-all duration-300 relative overflow-hidden
-                ${isActive ? 'text-white font-bold bg-white/5' : 'text-white/40 hover:text-white/80'}`}
-              style={{
-                borderColor: isActive ? `${n.color}40` : 'rgba(255,255,255,0.03)',
-                background: isActive ? `linear-gradient(90deg, ${n.color}08, transparent)` : 'transparent'
-              }}
-            >
-              {/* Active dynamic runic ring highlight */}
-              {isActive && (
-                <motion.div 
-                  layoutId="activeRunicBorder"
-                  className="absolute left-0 top-0 bottom-0 w-1 rounded-full"
-                  style={{ backgroundColor: n.color, boxShadow: `0 0 10px ${n.color}` }}
-                />
-              )}
-              
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 relative overflow-hidden"
-                style={isActive ? { background: `${n.color}15`, border: `1px solid ${n.color}35`, boxShadow: `0 0 10px ${n.color}30` } : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                {/* Active rotating spell ring background */}
-                {isActive && (
-                  <motion.div 
-                    className="absolute inset-0 rounded-xl border border-dashed pointer-events-none opacity-40"
-                    style={{ borderColor: n.color }}
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-                  />
-                )}
-                <n.icon className="w-4 h-4 z-10" style={isActive ? { color: n.color, filter: `drop-shadow(0 0 4px ${n.color})` } : {}} />
-              </div>
+            <div key={cat.title} className="space-y-1.5">
+              <span className="px-2.5 text-[8px] font-black uppercase tracking-widest block font-mono" style={{ color: `${cat.color}aa` }}>
+                // {cat.title}
+              </span>
+              <div className="space-y-1">
+                {catItems.map(n => {
+                  const isActive = active === n.id
+                  return (
+                    <motion.button key={n.id}
+                      whileHover={{ 
+                        scale: 1.02, 
+                        x: 4, 
+                        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                        boxShadow: `0 0 12px ${n.color}15`,
+                        borderColor: `${n.color}30`
+                      }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={(e) => {
+                        fireFX('sidebarSelect', { x: e.clientX, y: e.clientY, color: n.color })
+                        triggerTransition(n.id)
+                        setMobileOpen(false)
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl border text-left transition-all duration-300 relative overflow-hidden
+                        ${isActive ? 'text-white font-bold bg-white/5' : 'text-white/40 hover:text-white/80'}`}
+                      style={{
+                        borderColor: isActive ? `${n.color}40` : 'rgba(255,255,255,0.03)',
+                        background: isActive ? `linear-gradient(90deg, ${n.color}08, transparent)` : 'transparent'
+                      }}
+                    >
+                      {/* Active dynamic runic ring highlight */}
+                      {isActive && (
+                        <motion.div 
+                          layoutId="activeRunicBorder"
+                          className="absolute left-0 top-0 bottom-0 w-1 rounded-full"
+                          style={{ backgroundColor: n.color, boxShadow: `0 0 10px ${n.color}` }}
+                        />
+                      )}
+                      
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all duration-300 relative overflow-hidden"
+                        style={isActive ? { background: `${n.color}15`, border: `1px solid ${n.color}35`, boxShadow: `0 0 10px ${n.color}30` } : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        {isActive && (
+                          <motion.div 
+                            className="absolute inset-0 rounded-lg border border-dashed pointer-events-none opacity-40"
+                            style={{ borderColor: n.color }}
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                          />
+                        )}
+                        <n.icon className="w-3.5 h-3.5 z-10" style={isActive ? { color: n.color, filter: `drop-shadow(0 0 4px ${n.color})` } : {}} />
+                      </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-black tracking-wide truncate">{n.label}</span>
-                  <span className="text-[7px] font-bold opacity-60 uppercase tracking-widest px-1.5 py-0.5 rounded border ml-2"
-                    style={{ color: n.color, borderColor: `${n.color}30`, background: `${n.color}08` }}>
-                    {n.manaCost}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center mt-0.5">
-                  <span className="text-[9px] font-mono opacity-50 truncate" style={{ color: isActive ? n.color : undefined }}>
-                    {n.spellName}
-                  </span>
-                  <span className="text-[7px] uppercase tracking-wider font-bold opacity-20">
-                    {n.school}
-                  </span>
-                </div>
-                {n.desc && (
-                  <div className="text-[8px] text-white/30 truncate mt-0.5 font-sans leading-none font-medium">
-                    {n.desc}
-                  </div>
-                )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-center leading-none">
+                          <span className="text-[11px] font-bold tracking-wide truncate">{n.label}</span>
+                          <span className="text-[6px] font-bold opacity-60 uppercase tracking-widest px-1 py-0.2 rounded border ml-2"
+                            style={{ color: n.color, borderColor: `${n.color}20`, background: `${n.color}05` }}>
+                            {n.manaCost}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.button>
+                  )
+                })}
               </div>
-            </motion.button>
+            </div>
           )
         })}
       </nav>
@@ -4388,11 +4522,455 @@ function SidebarContent({
   )
 }
 
+function ExpandedGrimoireDeck({ isOpen, onClose, active, triggerTransition, stats }) {
+  const [search, setSearch] = useState('');
+
+  if (!isOpen) return null;
+
+  const filteredCategories = NAV_CATEGORIES.map(cat => {
+    const items = NAV.filter(item => {
+      if (!cat.ids.includes(item.id)) return false;
+      if (!search.trim()) return true;
+      const term = search.toLowerCase();
+      return (
+        item.label.toLowerCase().includes(term) ||
+        item.spellName.toLowerCase().includes(term) ||
+        (item.desc && item.desc.toLowerCase().includes(term)) ||
+        cat.title.toLowerCase().includes(term)
+      );
+    });
+    return { ...cat, items };
+  }).filter(cat => cat.items.length > 0);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      className="fixed inset-0 z-50 bg-black/95 backdrop-blur-2xl flex flex-col p-6 md:p-12 overflow-y-auto"
+      style={{
+        background: 'radial-gradient(circle at center, rgba(13, 10, 30, 0.98) 0%, rgba(2, 2, 5, 0.99) 100%)',
+      }}
+    >
+      {/* Background magical circle pattern */}
+      <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden opacity-10 mix-blend-screen">
+        <svg className="w-[800px] h-[800px] text-amber-500 animate-[spin_60s_linear_infinite]" viewBox="0 0 200 200" fill="none" stroke="currentColor">
+          <circle cx="100" cy="100" r="90" strokeWidth="0.5" strokeDasharray="3 3" />
+          <circle cx="100" cy="100" r="82" strokeWidth="0.8" />
+          <polygon points="100,18 135,125 45,60 155,60 65,125" strokeWidth="0.5" strokeLinejoin="round" />
+          <circle cx="100" cy="100" r="50" strokeWidth="0.4" />
+        </svg>
+      </div>
+
+      {/* Header */}
+      <div className="relative z-10 flex items-center justify-between border-b border-white/10 pb-6 mb-8 max-w-7xl mx-auto w-full">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-amber-400 to-amber-600 shadow-[0_0_15px_rgba(245,158,11,0.4)]">
+              <Sparkles className="w-5 h-5 text-black" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white uppercase">System Deck Portal</h1>
+              <p className="text-xs text-amber-500/80 font-mono tracking-widest mt-0.5">All System Tools & Navigation</p>
+            </div>
+          </div>
+        </div>
+        
+        <button
+          onClick={onClose}
+          className="w-10 h-10 rounded-xl border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:border-white/20 transition-all duration-300 hover:bg-white/5 cursor-pointer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Search Bar */}
+      <div className="relative z-10 max-w-md mx-auto w-full mb-10">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+          <input
+            type="text"
+            placeholder="Search spells, attributes, systems..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 rounded-2xl border border-white/10 bg-black/60 text-white placeholder-white/20 text-sm font-mono focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(245,158,11,0.15)] transition-all duration-300"
+          />
+        </div>
+      </div>
+
+      {/* Categories & Cards Grid */}
+      <div className="relative z-10 flex-1 max-w-7xl mx-auto w-full space-y-12 pb-12">
+        {filteredCategories.map(cat => (
+          <div key={cat.title} className="space-y-4">
+            <div className="flex items-center gap-3 border-b border-white/5 pb-2">
+              <span className="w-1.5 h-4 rounded-full" style={{ backgroundColor: cat.color }} />
+              <h2 className="font-mono font-black text-xs uppercase tracking-widest text-white/50">{cat.title}</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {cat.items.map(n => {
+                const isActive = active === n.id
+                return (
+                  <motion.div
+                    key={n.id}
+                    onClick={(e) => {
+                      fireFX('sidebarSelect', { x: e.clientX, y: e.clientY, color: n.color })
+                      triggerTransition(n.id)
+                      onClose()
+                    }}
+                    whileHover={{ scale: 1.03, y: -4 }}
+                    whileTap={{ scale: 0.97 }}
+                    className={`relative p-5 rounded-2xl border text-left cursor-pointer transition-all duration-300 group overflow-hidden ${
+                      isActive ? 'bg-white/5' : 'bg-white/[0.01]'
+                    }`}
+                    style={{
+                      borderColor: isActive ? `${n.color}50` : 'rgba(255, 255, 255, 0.05)',
+                      boxShadow: isActive ? `0 0 25px ${n.color}15` : 'none'
+                    }}
+                  >
+                    {/* Glowing coordinate background matching color */}
+                    <div 
+                      className="absolute -top-12 -right-12 w-28 h-28 rounded-full blur-2xl opacity-10 group-hover:opacity-25 transition-opacity duration-500"
+                      style={{ background: n.color }}
+                    />
+                    
+                    <div className="flex items-start gap-4">
+                      {/* Icon wrapper with rotating spell ring on hover */}
+                      <div 
+                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border relative overflow-hidden transition-all duration-300"
+                        style={{
+                          background: isActive ? `${n.color}20` : 'rgba(255, 255, 255, 0.02)',
+                          borderColor: isActive ? `${n.color}40` : 'rgba(255, 255, 255, 0.05)',
+                        }}
+                      >
+                        <motion.div 
+                          className="absolute inset-0 rounded-xl border border-dashed pointer-events-none opacity-0 group-hover:opacity-40"
+                          style={{ borderColor: n.color }}
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
+                        />
+                        <n.icon className="w-5 h-5 z-10 transition-transform duration-300 group-hover:scale-110" style={{ color: n.color }} />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-center leading-none">
+                          <span className="text-sm font-black tracking-wide text-white group-hover:text-white/95">{n.label}</span>
+                          <span className="text-[7px] font-bold opacity-60 uppercase tracking-widest px-1.5 py-0.5 rounded border border-white/10"
+                            style={{ color: n.color }}>
+                            {n.manaCost}
+                          </span>
+                        </div>
+                        
+                        <p className="text-[10px] font-mono opacity-50 mt-1" style={{ color: n.color }}>{n.spellName}</p>
+                        
+                        {n.desc && (
+                          <p className="text-[10px] text-white/40 leading-snug mt-2.5 font-medium group-hover:text-white/50 transition-colors">
+                            {n.desc}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+function SettingsSection({ refresh }) {
+  const { user, refreshUser } = useAuth()
+  const { subscription, refreshSubscription } = useSubscription()
+  const [profile, setProfile] = useState({
+    name: '',
+    age: '',
+    weight: '',
+    height: '',
+    waterNotifications: false,
+    waterInterval: 30
+  })
+  const [saving, setSaving] = useState(false)
+  const [reportModalOpen, setReportModalOpen] = useState(false)
+  const [simulatedReport, setSimulatedReport] = useState('')
+  const [sendingReport, setSendingReport] = useState(false)
+
+  useEffect(() => {
+    if (user) {
+      setProfile({
+        name: user.name || '',
+        age: user.age || '',
+        weight: user.weight || '',
+        height: user.height || '',
+        waterNotifications: user.waterNotifications || false,
+        waterInterval: user.waterInterval || 30
+      })
+    }
+  }, [user])
+
+  const saveProfile = async () => {
+    setSaving(true)
+    try {
+      const res = await api.patch('user/profile', {
+        name: profile.name,
+        age: Number(profile.age) || 0,
+        weight: Number(profile.weight) || 0,
+        height: Number(profile.height) || 0,
+        waterNotifications: profile.waterNotifications,
+        waterInterval: Number(profile.waterInterval) || 30
+      })
+      toast.success('System parameters calibrated successfully!')
+      await refreshUser()
+      if (refresh) refresh()
+    } catch (e) {
+      toast.error('Failed to update system parameters')
+      console.error(e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const triggerProgressReport = async () => {
+    setSendingReport(true)
+    try {
+      const res = await api.post('user/send-report', {})
+      setSimulatedReport(res.report)
+      setReportModalOpen(true)
+      toast.success('Progress report email dispatched successfully!')
+    } catch (e) {
+      toast.error('Failed to generate progress report')
+      console.error(e)
+    } finally {
+      setSendingReport(false)
+    }
+  }
+
+  const cancelSubscription = async () => {
+    if (!confirm('Are you sure you want to cancel your hunter contract ascension?')) return
+    try {
+      await api.post('subscription/cancel', {})
+      toast.success('Subscription cancelled successfully')
+      if (refreshSubscription) await refreshSubscription()
+    } catch (e) {
+      toast.error('Failed to cancel subscription')
+      console.error(e)
+    }
+  }
+
+  return (
+    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
+      <SectionHeader 
+        title="Settings Console" 
+        desc="Calibrate your user profile, vital specifications, notification limits, and account status." 
+        icon={User} 
+      />
+
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Profile Card */}
+        <motion.div variants={fadeUp} className="glass-card rounded-3xl p-6 border border-cyan-500/10">
+          <h3 className="text-lg font-black tracking-tight text-white mb-4 flex items-center gap-2">
+            <User className="w-5 h-5 text-cyan-400" /> Vital Specifications
+          </h3>
+          <div className="space-y-4">
+            <Field label="Hunter Designation (Name)">
+              <Input 
+                value={profile.name} 
+                onChange={e => setProfile({ ...profile, name: e.target.value })} 
+                className="bg-black/40 border-white/10 text-white"
+              />
+            </Field>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Age">
+                <Input 
+                  type="number" 
+                  value={profile.age} 
+                  onChange={e => setProfile({ ...profile, age: e.target.value })} 
+                  className="bg-black/40 border-white/10 text-white"
+                />
+              </Field>
+              <Field label="Weight (kg)">
+                <Input 
+                  type="number" 
+                  value={profile.weight} 
+                  onChange={e => setProfile({ ...profile, weight: e.target.value })} 
+                  className="bg-black/40 border-white/10 text-white"
+                />
+              </Field>
+              <Field label="Height (cm)">
+                <Input 
+                  type="number" 
+                  value={profile.height} 
+                  onChange={e => setProfile({ ...profile, height: e.target.value })} 
+                  className="bg-black/40 border-white/10 text-white"
+                />
+              </Field>
+            </div>
+            
+            <GlowButton onClick={saveProfile} disabled={saving} className="w-full justify-center">
+              {saving ? 'Calibrating...' : 'Update Vitals'}
+            </GlowButton>
+          </div>
+        </motion.div>
+
+        {/* Notifications & Hydration Alerts */}
+        <motion.div variants={fadeUp} className="glass-card rounded-3xl p-6 border border-pink-500/10">
+          <h3 className="text-lg font-black tracking-tight text-white mb-4 flex items-center gap-2">
+            <Droplets className="w-5 h-5 text-pink-400" /> Hydration Core Reminders
+          </h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
+              <div>
+                <p className="text-sm font-bold text-white">Water Intake Notifications</p>
+                <p className="text-xs text-white/40 mt-0.5">Enable regular alerts to drink water</p>
+              </div>
+              <button
+                onClick={() => setProfile({ ...profile, waterNotifications: !profile.waterNotifications })}
+                className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 flex items-center ${profile.waterNotifications ? 'bg-pink-500 justify-end' : 'bg-white/10 justify-start'}`}
+              >
+                <motion.div 
+                  className="w-4 h-4 rounded-full bg-white shadow-md"
+                  layout
+                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                />
+              </button>
+            </div>
+
+            <Field label="Reminder Interval">
+              <Select 
+                value={String(profile.waterInterval)} 
+                onValueChange={v => setProfile({ ...profile, waterInterval: Number(v) })}
+              >
+                <SelectTrigger className="bg-black/40 border-white/10 text-white">
+                  <SelectValue placeholder="Select interval" />
+                </SelectTrigger>
+                <SelectContent style={{ background: 'rgba(10,8,20,0.95)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                  <SelectItem value="15">Every 15 Minutes</SelectItem>
+                  <SelectItem value="30">Every 30 Minutes</SelectItem>
+                  <SelectItem value="60">Every 1 Hour</SelectItem>
+                  <SelectItem value="120">Every 2 Hours</SelectItem>
+                  <SelectItem value="180">Every 3 Hours</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+
+            <GlowButton onClick={saveProfile} disabled={saving} variant="primary" className="w-full justify-center border-pink-500/30">
+              Save Notification Preferences
+            </GlowButton>
+          </div>
+        </motion.div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Account Security & Info */}
+        <motion.div variants={fadeUp} className="glass-card rounded-3xl p-6 border border-cyan-500/10 flex flex-col justify-between">
+          <div>
+            <h3 className="text-lg font-black tracking-tight text-white mb-4 flex items-center gap-2">
+              <Shield className="w-5 h-5 text-cyan-400" /> Security & Account status
+            </h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center text-sm py-1.5 border-b border-white/5">
+                <span className="text-white/40">Email Identification</span>
+                <span className="text-white font-bold">{user?.email}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm py-1.5 border-b border-white/5">
+                <span className="text-white/40">Hunter Rank Status</span>
+                <span className="text-cyan-400 font-bold font-mono">AUTHORIZED MEMBER</span>
+              </div>
+              <div className="flex justify-between items-center text-sm py-1.5">
+                <span className="text-white/40">Registered Identity Code</span>
+                <span className="text-white/60 font-mono text-xs">{user?.id}</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6">
+            <GlowButton variant="ghost" onClick={triggerProgressReport} disabled={sendingReport} className="w-full justify-center">
+              {sendingReport ? 'Generating Report...' : 'Simulate Progress Report Email'}
+            </GlowButton>
+          </div>
+        </motion.div>
+
+        {/* Subscription Status Card */}
+        <motion.div variants={fadeUp} className="glass-card rounded-3xl p-6 border border-amber-500/10 flex flex-col justify-between">
+          <div>
+            <h3 className="text-lg font-black tracking-tight text-white mb-4 flex items-center gap-2">
+              <Crown className="w-5 h-5 text-amber-400" /> Active Subscription Contract
+            </h3>
+            {subscription && subscription.isActive ? (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-sm py-1.5 border-b border-white/5">
+                  <span className="text-white/40">Ascended Rank Tier</span>
+                  <span className="text-amber-400 font-black uppercase tracking-wider">{subscription.plan} Level</span>
+                </div>
+                <div className="flex justify-between items-center text-sm py-1.5 border-b border-white/5">
+                  <span className="text-white/40">Contract Expiration Date</span>
+                  <span className="text-white font-bold font-mono">{new Date(subscription.endDate).toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm py-1.5">
+                  <span className="text-white/40">Payment Authentication</span>
+                  <span className="text-emerald-400 font-bold font-mono">VERIFIED</span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-white/60">You are currently on the <span className="text-white font-bold">Standard Free Tier</span>.</p>
+                <p className="text-xs text-white/30">Ascend to premium tiers to unlock advanced artificial intelligence features and interactive charts.</p>
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-6">
+            {subscription && subscription.isActive ? (
+              <GlowButton onClick={cancelSubscription} variant="danger" className="w-full justify-center">
+                Cancel Premium Contract
+              </GlowButton>
+            ) : (
+              <GlowButton onClick={() => window.location.hash = '#pricing'} variant="primary" className="w-full justify-center">
+                Ascend to Premium Tier
+              </GlowButton>
+            )}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Progress Report Simulation Modal */}
+      <Dialog open={reportModalOpen} onOpenChange={setReportModalOpen}>
+        <DialogContent style={{ background: 'rgba(10,8,20,0.98)', border: '1px solid rgba(139,92,246,0.3)', backdropFilter: 'blur(45px)', maxWidth: '600px' }}>
+          <DialogHeader>
+            <DialogTitle className="aurora-text text-xl font-black">Daily Progress Report Sent!</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 my-2">
+            <p className="text-sm text-white/60">
+              The daily report has been simulated in the system logs and dispatched to <span className="text-cyan-400 font-bold">{user?.email}</span>. Here is the report body structure:
+            </p>
+            <pre className="p-4 rounded-xl bg-black/60 border border-white/5 text-[11px] font-mono text-cyan-300 overflow-x-auto whitespace-pre leading-relaxed">
+              {simulatedReport}
+            </pre>
+          </div>
+          <DialogFooter>
+            <GlowButton variant="ghost" onClick={() => {
+              navigator.clipboard.writeText(simulatedReport)
+              toast.success('Report copied to clipboard!')
+            }}>
+              Copy to Clipboard
+            </GlowButton>
+            <GlowButton onClick={() => setReportModalOpen(false)}>
+              Close
+            </GlowButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </motion.div>
+  )
+}
+
 // ══════════════════════════════════════════════════════════
 // ROOT APP
 // ══════════════════════════════════════════════════════════
 function AppContent() {
-  const { user, loading, token, logout } = useAuth()
+  const { user, loading, token, logout, refreshUser } = useAuth()
   const [active, setActive] = useState('dashboard')
   const [stats, setStats] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -4400,12 +4978,70 @@ function AppContent() {
   const [time, setTime] = useState('')
   const [activeTransition, setActiveTransition] = useState(null)
   const [pendingActive, setPendingActive] = useState(null)
-  const [selectedSchool, setSelectedSchool] = useState('All')
+  const [grimoireExpanded, setGrimoireExpanded] = useState(false)
+  const [showWaterAlert, setShowWaterAlert] = useState(false)
 
-  const filteredNav = useMemo(() => {
-    if (selectedSchool === 'All') return NAV
-    return NAV.filter(n => n.school === selectedSchool)
-  }, [selectedSchool])
+  useEffect(() => {
+    if (!user || !user.waterNotifications) {
+      setShowWaterAlert(false)
+      return
+    }
+    const intervalMs = (user.waterInterval || 30) * 60 * 1000
+    const timer = setInterval(() => {
+      setShowWaterAlert(true)
+    }, intervalMs)
+
+    // Trigger initial demo reminder after 12 seconds so they can verify it works
+    const initialTimer = setTimeout(() => {
+      setShowWaterAlert(true)
+    }, 12000)
+
+    return () => {
+      clearInterval(timer)
+      clearTimeout(initialTimer)
+    }
+  }, [user?.waterNotifications, user?.waterInterval])
+
+  const logQuickWater = async () => {
+    try {
+      const healthLogs = await api.get('health')
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const todayEntry = healthLogs.find(l => l.date && l.date.slice(0, 10) === todayStr)
+      
+      if (todayEntry) {
+        const currentWater = Number(todayEntry.water) || 0
+        await api.patch(`health/${todayEntry.id}`, { water: +(currentWater + 0.25).toFixed(2) })
+      } else {
+        await api.post('health', { date: todayStr, water: 0.25 })
+      }
+      
+      toast.success('Logged 250ml of water! Vitality restored. 🥤')
+      setShowWaterAlert(false)
+      loadStats()
+    } catch (e) {
+      toast.error('Failed to log water intake')
+      console.error(e)
+    }
+  }
+
+  const disableWaterNotifications = async () => {
+    try {
+      await api.patch('user/profile', {
+        name: user.name,
+        age: user.age,
+        weight: user.weight,
+        height: user.height,
+        waterNotifications: false,
+        waterInterval: user.waterInterval || 30
+      })
+      toast.success('Water notifications disabled.')
+      setShowWaterAlert(false)
+      await refreshUser()
+    } catch (e) {
+      toast.error('Failed to update preferences')
+      console.error(e)
+    }
+  }
 
   const triggerTransition = useCallback((targetId) => {
     let type = null
@@ -4433,6 +5069,7 @@ function AppContent() {
     else if (targetId === 'time-river') type = 'time_ripple'
     else if (targetId === 'knowledge-fractal') type = 'fractal'
     else if (targetId === 'predictive-future') type = 'sharingan'
+    else if (targetId === 'settings') type = 'constant_flux'
 
     if (type) {
       setActiveTransition(type)
@@ -4504,32 +5141,36 @@ function AppContent() {
 
   const handleUpgrade = () => setActive('pricing')
 
-  const sections = {
-    dashboard: <Dashboard stats={stats} refresh={loadStats} go={triggerTransition} />,
-    guilds: <GuildChamber stats={stats} refresh={loadStats} />,
-    'quiz-revision': <QuizRevision refresh={loadStats} />,
-    meditate: <Meditate refresh={loadStats} />,
-    'ai-planner': <PremiumWrapper feature="ai-planner" onUpgrade={handleUpgrade}><AiPlanner /></PremiumWrapper>,
-    'daily-plan': <PremiumWrapper feature="ai-planner" onUpgrade={handleUpgrade}><DailyPlanSection refresh={loadStats} /></PremiumWrapper>,
-    study: <StudyTracker refresh={loadStats} />,
-    habits: <Habits refresh={loadStats} />,
-    tasks: <Tasks refresh={loadStats} />,
-    goals: <Goals refresh={loadStats} />,
-    health: <Health refresh={loadStats} />,
-    exercise: <Exercise refresh={loadStats} />,
-    journal: <Journal refresh={loadStats} />,
-    knowledge: <Knowledge refresh={loadStats} />,
-    analytics: <PremiumWrapper feature="advanced-analytics" onUpgrade={handleUpgrade}><Analytics stats={stats} /></PremiumWrapper>,
-    pricing: <PricingSection />,
-    constellation: <PremiumWrapper feature="data-constellation" onUpgrade={handleUpgrade}><DataConstellationSection refresh={loadStats} /></PremiumWrapper>,
-    'neural-network': <PremiumWrapper feature="neural-network" onUpgrade={handleUpgrade}><NeuralNetworkSection refresh={loadStats} /></PremiumWrapper>,
-    'knowledge-galaxy': <PremiumWrapper feature="knowledge-galaxy" onUpgrade={handleUpgrade}><KnowledgeGalaxySection refresh={loadStats} /></PremiumWrapper>,
-    'growth-tree': <PremiumWrapper feature="growth-tree" onUpgrade={handleUpgrade}><GrowthTreeSection refresh={loadStats} /></PremiumWrapper>,
-    evolution: <PremiumWrapper feature="evolution" onUpgrade={handleUpgrade}><EvolutionChamberSection refresh={loadStats} /></PremiumWrapper>,
-    'digital-brain': <PremiumWrapper feature="digital-brain" onUpgrade={handleUpgrade}><DigitalBrainSection refresh={loadStats} /></PremiumWrapper>,
-    'time-river': <PremiumWrapper feature="time-river" onUpgrade={handleUpgrade}><TimeRiverSection refresh={loadStats} /></PremiumWrapper>,
-    'knowledge-fractal': <PremiumWrapper feature="knowledge-fractal" onUpgrade={handleUpgrade}><KnowledgeFractalSection refresh={loadStats} /></PremiumWrapper>,
-    'predictive-future': <PremiumWrapper feature="predictive-future" onUpgrade={handleUpgrade}><PredictiveFutureSection refresh={loadStats} /></PremiumWrapper>,
+  const renderSection = () => {
+    switch (active) {
+      case 'dashboard': return <Dashboard stats={stats} refresh={loadStats} go={triggerTransition} />
+      case 'guilds': return <GuildChamber stats={stats} refresh={loadStats} />
+      case 'quiz-revision': return <QuizRevision refresh={loadStats} />
+      case 'meditate': return <Meditate refresh={loadStats} />
+      case 'ai-planner': return <PremiumWrapper feature="ai-planner" onUpgrade={handleUpgrade}><AiPlanner /></PremiumWrapper>
+      case 'daily-plan': return <PremiumWrapper feature="ai-planner" onUpgrade={handleUpgrade}><DailyPlanSection refresh={loadStats} /></PremiumWrapper>
+      case 'study': return <StudyTracker refresh={loadStats} />
+      case 'habits': return <Habits refresh={loadStats} />
+      case 'tasks': return <Tasks refresh={loadStats} />
+      case 'goals': return <Goals refresh={loadStats} />
+      case 'health': return <Health refresh={loadStats} />
+      case 'exercise': return <Exercise refresh={loadStats} />
+      case 'journal': return <Journal refresh={loadStats} />
+      case 'knowledge': return <Knowledge refresh={loadStats} />
+      case 'analytics': return <PremiumWrapper feature="advanced-analytics" onUpgrade={handleUpgrade}><Analytics stats={stats} /></PremiumWrapper>
+      case 'pricing': return <PricingSection />
+      case 'constellation': return <PremiumWrapper feature="data-constellation" onUpgrade={handleUpgrade}><DataConstellationSection refresh={loadStats} /></PremiumWrapper>
+      case 'neural-network': return <PremiumWrapper feature="neural-network" onUpgrade={handleUpgrade}><NeuralNetworkSection refresh={loadStats} /></PremiumWrapper>
+      case 'knowledge-galaxy': return <PremiumWrapper feature="knowledge-galaxy" onUpgrade={handleUpgrade}><KnowledgeGalaxySection refresh={loadStats} /></PremiumWrapper>
+      case 'growth-tree': return <PremiumWrapper feature="growth-tree" onUpgrade={handleUpgrade}><GrowthTreeSection refresh={loadStats} /></PremiumWrapper>
+      case 'evolution': return <PremiumWrapper feature="evolution" onUpgrade={handleUpgrade}><EvolutionChamberSection refresh={loadStats} /></PremiumWrapper>
+      case 'digital-brain': return <PremiumWrapper feature="digital-brain" onUpgrade={handleUpgrade}><DigitalBrainSection refresh={loadStats} /></PremiumWrapper>
+      case 'time-river': return <PremiumWrapper feature="time-river" onUpgrade={handleUpgrade}><TimeRiverSection refresh={loadStats} /></PremiumWrapper>
+      case 'knowledge-fractal': return <PremiumWrapper feature="knowledge-fractal" onUpgrade={handleUpgrade}><KnowledgeFractalSection refresh={loadStats} /></PremiumWrapper>
+      case 'predictive-future': return <PremiumWrapper feature="predictive-future" onUpgrade={handleUpgrade}><PredictiveFutureSection refresh={loadStats} /></PremiumWrapper>
+      case 'settings': return <SettingsSection refresh={loadStats} />
+      default: return null
+    }
   }
 
   return (
@@ -4595,10 +5236,8 @@ function AppContent() {
               setMobileOpen={setMobileOpen}
               desktopCollapsed={desktopCollapsed}
               setDesktopCollapsed={setDesktopCollapsed}
+              setGrimoireExpanded={setGrimoireExpanded}
               active={active}
-              selectedSchool={selectedSchool}
-              setSelectedSchool={setSelectedSchool}
-              filteredNav={filteredNav}
               triggerTransition={triggerTransition}
               time={time}
               logout={logout}
@@ -4669,10 +5308,8 @@ function AppContent() {
                 setMobileOpen={setMobileOpen}
                 desktopCollapsed={desktopCollapsed}
                 setDesktopCollapsed={setDesktopCollapsed}
+                setGrimoireExpanded={setGrimoireExpanded}
                 active={active}
-                selectedSchool={selectedSchool}
-                setSelectedSchool={setSelectedSchool}
-                filteredNav={filteredNav}
                 triggerTransition={triggerTransition}
                 time={time}
                 logout={logout}
@@ -4703,11 +5340,23 @@ function AppContent() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.99 }}
               transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}>
-              {sections[active]}
+              {renderSection()}
             </motion.div>
           </AnimatePresence>
         </div>
       </main>
+
+      <AnimatePresence>
+        {grimoireExpanded && (
+          <ExpandedGrimoireDeck
+            isOpen={grimoireExpanded}
+            onClose={() => setGrimoireExpanded(false)}
+            active={active}
+            triggerTransition={triggerTransition}
+            stats={stats}
+          />
+        )}
+      </AnimatePresence>
 
       <CinematicOverlay
         activeTransition={activeTransition}
@@ -4719,6 +5368,57 @@ function AppContent() {
           setActiveTransition(null)
         }}
       />
+
+      <AnimatePresence>
+        {showWaterAlert && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-50 w-[calc(100vw-3rem)] max-w-md"
+          >
+            <div 
+              className="glass-card border border-pink-500/40 p-4 rounded-2xl flex flex-col gap-3 shadow-[0_0_30px_rgba(236,72,153,0.25)] bg-black/90 backdrop-blur-xl"
+              style={{
+                background: 'linear-gradient(135deg, rgba(20, 10, 25, 0.95) 0%, rgba(10, 5, 15, 0.98) 100%)'
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-pink-500/20 border border-pink-500/30 shrink-0 mt-0.5">
+                  <Droplets className="w-5 h-5 text-pink-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-black tracking-tight text-white flex items-center gap-1.5">
+                    Vitality Reminder <span className="text-[9px] text-pink-400 border border-pink-500/30 px-1 py-0.2 rounded font-mono uppercase">Hydration Core</span>
+                  </h4>
+                  <p className="text-xs text-white/60 mt-1">Drink 250ml water to maintain your Vitality (VIT) and stick to your growth path.</p>
+                </div>
+                <button
+                  onClick={() => setShowWaterAlert(false)}
+                  className="p-1 rounded-lg hover:bg-white/5 text-white/40 hover:text-white/70 transition-all shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-white/5 pt-2 mt-1">
+                <button
+                  onClick={disableWaterNotifications}
+                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80 border border-white/10 text-[10px] font-bold transition-all"
+                >
+                  Mute Notifications
+                </button>
+                <button
+                  onClick={logQuickWater}
+                  className="px-3.5 py-1.5 rounded-lg bg-pink-500 hover:bg-pink-600 text-white font-bold text-[10px] shadow-[0_0_10px_rgba(236,72,153,0.3)] transition-all flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Log 250ml
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
