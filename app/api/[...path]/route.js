@@ -355,6 +355,13 @@ async function getStats(userId) {
   const totalTasksToday = tasks.filter(x => dateKey(x.dueDate || x.createdAt) === t).length
   const todayHabits    = habitLogs.filter(h => h.date === t).length
   const totalHabits    = habits.length
+  const todayExercise  = exercises.filter(e => e.date === t).reduce((a,b) => a + Number(e.duration || 0), 0)
+  const activeGoals    = goals.filter(g => (g.progress || 0) < 100).length
+  const journalEntries = journals.length
+  const booksRead      = knowledge.length
+  const quizCount      = studyLogs.filter(s => s.revision === true).length
+  const latestQuiz     = studyLogs.filter(s => s.revision === true).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
+  const quizScore      = latestQuiz ? parseInt(latestQuiz.subtopic?.match(/Score (\d+)/)?.[1] || 0) : 0
 
   const weeklyStudy = last7.map(date => ({
     date,
@@ -577,6 +584,7 @@ async function getStats(userId) {
   return {
     today: t, todayStudy: +todayStudy.toFixed(2),
     todayTasks, totalTasksToday, todayHabits, totalHabits, streak,
+    todayExercise, activeGoals, journalEntries, booksRead, quizCount, quizScore,
     weeklyStudy, monthlyStudy, subjectData, strengths, goalProgress, habit7, heatmap, activities,
     scores: { studyScore, consistencyScore, learningScore, productivityScore, healthScore, overallScore },
     counts: { studyLogs: studyLogs.length, habits: habits.length, tasks: tasks.length, goals: goals.length, journal: journals.length },
@@ -825,20 +833,20 @@ ${truncated}`
 // ── AI Quiz Generator ─────────────────────────────────────
 async function handleAIGenerateQuiz(body) {
   try {
-    const { topic } = body
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) return err('OPENAI_API_KEY not configured')
+    const { topic, questionCount = 20 } = body
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) return err('GEMINI_API_KEY not configured')
     if (!topic) return err('Topic required')
 
-    const { OpenAI } = await import('openai')
-    const openai     = new OpenAI({ apiKey })
+    const { GoogleGenerativeAI } = await import('@google/generative-ai')
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
-    const systemPrompt = `You are a legendary Hunter Academy Quiz Instructor. 
-Create exactly 5 high-fidelity Multiple Choice Questions (MCQs) for the topic to evaluate the user's mind sharpness and knowledge level.
+    const prompt = `You are a legendary Hunter Academy Quiz Instructor. 
+Create exactly ${questionCount} high-fidelity Multiple Choice Questions (MCQs) for the topic to evaluate the user's mind sharpness and knowledge level.
 Each question should be challenging and highly relevant. Include comprehensive explanations.
-Always respond with VALID JSON only — no markdown formatting, no explanations outside the JSON.`
 
-    const userPrompt = `Generate a JSON object with a "questions" array containing exactly 5 questions for: "${topic}".
+Generate a JSON object with a "questions" array containing exactly ${questionCount} questions for: "${topic}".
 Each question object MUST match this structure:
 {
   "id": "q1",
@@ -846,21 +854,46 @@ Each question object MUST match this structure:
   "options": ["A) option1", "B) option2", "C) option3", "D) option4"],
   "correctAnswer": 0, // index of option (0-3)
   "explanation": "Why this answer is correct and what the topic covers."
-}`
+}
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.7,
-      max_tokens: 2500,
-    })
+Respond with VALID JSON only — no markdown formatting, no explanations outside the JSON.`
 
-    const raw = completion.choices[0].message.content
-    const quizData = JSON.parse(raw)
+    // Add retry logic for 503 errors
+    let retries = 3
+    let result
+    let lastError
+    
+    while (retries > 0) {
+      try {
+        result = await model.generateContent(prompt)
+        break
+      } catch (error) {
+        lastError = error
+        if (error.message?.includes('503') || error.message?.includes('Service Unavailable')) {
+          retries--
+          if (retries > 0) {
+            // Wait before retry (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, 2000 * (4 - retries)))
+            continue
+          }
+        }
+        throw error
+      }
+    }
+
+    if (!result) throw lastError
+
+    const raw = result.response.text()
+    
+    // Clean up the response if it contains markdown code blocks
+    let cleanedRaw = raw
+    if (raw.includes('```json')) {
+      cleanedRaw = raw.replace(/```json\n?/, '').replace(/```\n?$/, '')
+    } else if (raw.includes('```')) {
+      cleanedRaw = raw.replace(/```\n?/, '').replace(/```\n?$/, '')
+    }
+    
+    const quizData = JSON.parse(cleanedRaw)
     return ok({ success: true, quiz: quizData })
   } catch (e) {
     console.error('Quiz Generation error:', e)

@@ -513,12 +513,16 @@ function Dashboard({ stats, refresh, go }) {
         </div>
       </motion.div>
 
-      {/* Grid of stats */}
+      {/* Grid of stats - All Features */}
       <motion.div variants={stagger} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={Clock} label="Today Training" value={`${stats.todayStudy}h`} hint="Hours logged today" color="#22d3ee" />
         <StatCard icon={CheckCircle2} label="Daily Quests" value={`${stats.todayTasks}/${stats.totalTasksToday}`} hint="Quests completed" color="#34d399" />
         <StatCard icon={Activity} label="Habits Linked" value={`${stats.todayHabits}/${stats.totalHabits}`} hint="Daily actions aligned" color="#f472b6" />
         <StatCard icon={Flame} label="Continuous Streak" value={`${stats.streak}d`} hint="Consecutive login streak" color="#fbbf24" />
+        <StatCard icon={Dumbbell} label="Exercise" value={`${stats.todayExercise || 0}min`} hint="Physical training today" color="#a78bfa" />
+        <StatCard icon={Heart} label="Health Score" value={`${stats.healthScore || 0}%`} hint="Overall health metrics" color="#f472b6" />
+        <StatCard icon={Award} label="Quiz Score" value={`${stats.quizScore || 0}/20`} hint="Latest quiz result" color="#f59e0b" />
+        <StatCard icon={BookOpen} label="Books Read" value={`${stats.booksRead || 0}`} hint="Library archives count" color="#fb923c" />
       </motion.div>
 
       {/* Runic scores and Evaluation */}
@@ -615,6 +619,45 @@ function Dashboard({ stats, refresh, go }) {
               </ul>
             </ScrollArea>
           )}
+        </motion.div>
+      </motion.div>
+
+      {/* Feature Overview Cards */}
+      <motion.div variants={stagger} className="grid lg:grid-cols-4 gap-4">
+        <motion.div variants={fadeUp} className="glass-card rounded-2xl p-4 border border-white/10 hover:border-cyan-500/30 transition-all cursor-pointer" onClick={() => go('goals')}>
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="w-4 h-4 text-red-400" />
+            <h3 className="text-xs font-bold text-white/80">Milestones</h3>
+          </div>
+          <p className="text-2xl font-black text-white">{stats.activeGoals || 0}</p>
+          <p className="text-[10px] text-white/40 mt-1">Active goals tracking</p>
+        </motion.div>
+
+        <motion.div variants={fadeUp} className="glass-card rounded-2xl p-4 border border-white/10 hover:border-cyan-500/30 transition-all cursor-pointer" onClick={() => go('journal')}>
+          <div className="flex items-center gap-2 mb-2">
+            <NotebookPen className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-xs font-bold text-white/80">Journal</h3>
+          </div>
+          <p className="text-2xl font-black text-white">{stats.journalEntries || 0}</p>
+          <p className="text-[10px] text-white/40 mt-1">Reflections logged</p>
+        </motion.div>
+
+        <motion.div variants={fadeUp} className="glass-card rounded-2xl p-4 border border-white/10 hover:border-cyan-500/30 transition-all cursor-pointer" onClick={() => go('meditate')}>
+          <div className="flex items-center gap-2 mb-2">
+            <Zap className="w-4 h-4 text-pink-400" />
+            <h3 className="text-xs font-bold text-white/80">Meditation</h3>
+          </div>
+          <p className="text-2xl font-black text-white">{stats.totalMeditationMinutes || 0}m</p>
+          <p className="text-[10px] text-white/40 mt-1">Total meditation time</p>
+        </motion.div>
+
+        <motion.div variants={fadeUp} className="glass-card rounded-2xl p-4 border border-white/10 hover:border-cyan-500/30 transition-all cursor-pointer" onClick={() => go('quiz-revision')}>
+          <div className="flex items-center gap-2 mb-2">
+            <Award className="w-4 h-4 text-amber-400" />
+            <h3 className="text-xs font-bold text-white/80">Quizzes</h3>
+          </div>
+          <p className="text-2xl font-black text-white">{stats.quizCount || 0}</p>
+          <p className="text-[10px] text-white/40 mt-1">Quizzes completed</p>
         </motion.div>
       </motion.div>
     </motion.div>
@@ -3457,26 +3500,85 @@ function Analytics({ stats }) {
 function QuizRevision({ refresh }) {
   const [topic, setTopic] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingProgress, setLoadingProgress] = useState(0)
+  const [loadingTime, setLoadingTime] = useState(0)
   const [quiz, setQuiz] = useState(null)
   const [answers, setAnswers] = useState({})
   const [graded, setGraded] = useState(false)
   const [score, setScore] = useState(0)
+  const [savedQuizzes, setSavedQuizzes] = useState([])
+
+  // Load saved quizzes from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('savedQuizzes')
+    if (saved) {
+      setSavedQuizzes(JSON.parse(saved))
+    }
+  }, [])
+
+  // Save quiz to localStorage when generated
+  const saveQuizToStorage = (quizData, topicName) => {
+    const newQuiz = {
+      id: Date.now(),
+      topic: topicName,
+      quiz: quizData,
+      createdAt: new Date().toISOString()
+    }
+    const updated = [newQuiz, ...savedQuizzes].slice(0, 20) // Keep last 20 quizzes
+    setSavedQuizzes(updated)
+    localStorage.setItem('savedQuizzes', JSON.stringify(updated))
+  }
+
+  // Load a saved quiz
+  const loadSavedQuiz = (savedQuiz) => {
+    setTopic(savedQuiz.topic)
+    setQuiz(savedQuiz.quiz)
+    setAnswers({})
+    setGraded(false)
+    setScore(0)
+    toast.success(`Loaded quiz: ${savedQuiz.topic}`)
+  }
+
+  // Delete a saved quiz
+  const deleteSavedQuiz = (id) => {
+    const updated = savedQuizzes.filter(q => q.id !== id)
+    setSavedQuizzes(updated)
+    localStorage.setItem('savedQuizzes', JSON.stringify(updated))
+    toast.success('Quiz deleted')
+  }
 
   const generate = async () => {
     if (!topic.trim()) return toast.error('Enter a topic or subject first')
     setLoading(true)
+    setLoadingProgress(0)
+    setLoadingTime(0)
     setQuiz(null)
     setAnswers({})
     setGraded(false)
+    
+    // Simulate progress updates
+    const progressInterval = setInterval(() => {
+      setLoadingProgress(prev => {
+        if (prev >= 90) return prev
+        return prev + Math.random() * 15
+      })
+      setLoadingTime(prev => prev + 1)
+    }, 1000)
+    
     try {
-      const res = await api.post('ai/generate-quiz', { topic })
+      const res = await api.post('ai/generate-quiz', { topic, questionCount: 20 })
       if (res.error) throw new Error(res.error)
+      setLoadingProgress(100)
       setQuiz(res.quiz)
+      saveQuizToStorage(res.quiz, topic)
       toast.success('Revision Gate Open! Beat the test to restore Mind Sharpness! ⚔️')
     } catch (e) {
       toast.error(e.message || 'Failed to generate test questions')
     } finally {
+      clearInterval(progressInterval)
       setLoading(false)
+      setLoadingProgress(0)
+      setLoadingTime(0)
     }
   }
 
@@ -3486,8 +3588,8 @@ function QuizRevision({ refresh }) {
   }
 
   const submitQuiz = async () => {
-    if (Object.keys(answers).length < 5) {
-      return toast.error('Answer all 5 questions to complete the trial!')
+    if (Object.keys(answers).length < 20) {
+      return toast.error('Answer all 20 questions to complete the trial!')
     }
     let correct = 0
     quiz.questions.forEach((q, idx) => {
@@ -3501,19 +3603,19 @@ function QuizRevision({ refresh }) {
     await api.post('study-logs', {
       subject: 'Revision Gate',
       topic: topic,
-      subtopic: `Passed Trial: Score ${correct}/5`,
+      subtopic: `Passed Trial: Score ${correct}/20`,
       hours: 0.5,
       difficulty: 'hard',
       understanding: Math.max(1, correct),
-      notes: `Revision trial completed via AI Gate. Score: ${correct}/5.`,
+      notes: `Revision trial completed via AI Gate. Score: ${correct}/20.`,
       resources: 'AI Instructor',
       revision: true
     })
 
-    if (correct >= 4) {
-      toast.success(`VICTORY! Score: ${correct}/5. Massive XP and mind sharpness restored! 🎉`)
+    if (correct >= 16) {
+      toast.success(`VICTORY! Score: ${correct}/20. Massive XP and mind sharpness restored! 🎉`)
     } else {
-      toast.error(`DEFEAT! Score: ${correct}/5. You need at least 4 correct answers. Retry training. 💀`)
+      toast.error(`DEFEAT! Score: ${correct}/20. You need at least 16 correct answers. Retry training. 💀`)
     }
     refresh()
   }
@@ -3522,29 +3624,83 @@ function QuizRevision({ refresh }) {
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
       <SectionHeader title="Revision Gate" desc="Deploy AI-generated trials to alignment-check your knowledge streams. High-score grants XP and boosts Mind Sharpness." icon={Award} />
 
-      <motion.div variants={fadeUp} className="glass-card rounded-3xl p-6 border border-cyan-500/20">
-        <h3 className="text-sm font-bold text-white/80 mb-3 uppercase tracking-wider">Configure Trial Gate</h3>
-        <div className="flex gap-3">
-          <Input 
-            value={topic} 
-            onChange={e => setTopic(e.target.value)} 
-            placeholder="e.g., Quantum Physics, Next.js Middleware, JavaScript Closures" 
-            className="flex-1 bg-black/40 border-white/10"
-            disabled={loading}
-          />
-          <GlowButton onClick={generate} disabled={loading} className="shrink-0">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Open Revision Gate
-          </GlowButton>
-        </div>
-      </motion.div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Saved Quizzes Sidebar */}
+        <motion.div variants={fadeUp} className="lg:col-span-1 glass-card rounded-3xl p-4 border border-white/10">
+          <h3 className="text-sm font-bold text-white/80 mb-3 uppercase tracking-wider flex items-center gap-2">
+            <Library className="w-4 h-4 text-cyan-400" /> Saved Quizzes
+          </h3>
+          <ScrollArea className="h-[400px] pr-4">
+            {savedQuizzes.length === 0 ? (
+              <div className="text-center text-white/30 text-sm py-8">No saved quizzes yet</div>
+            ) : (
+              <div className="space-y-2">
+                {savedQuizzes.map((saved) => (
+                  <div key={saved.id} className="group relative p-3 rounded-xl bg-white/5 border border-white/10 hover:border-cyan-500/40 transition-all">
+                    <div className="flex items-start justify-between gap-2">
+                      <button 
+                        onClick={() => loadSavedQuiz(saved)}
+                        className="flex-1 text-left"
+                      >
+                        <p className="text-xs font-semibold text-white/90 line-clamp-2">{saved.topic}</p>
+                        <p className="text-[10px] text-white/40 mt-1">{new Date(saved.createdAt).toLocaleDateString()}</p>
+                      </button>
+                      <button 
+                        onClick={() => deleteSavedQuiz(saved.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-500/20 rounded"
+                      >
+                        <Trash2 className="w-3 h-3 text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </motion.div>
+
+        {/* Main Quiz Area */}
+        <div className="lg:col-span-3 space-y-6">
+          <motion.div variants={fadeUp} className="glass-card rounded-3xl p-6 border border-cyan-500/20">
+            <h3 className="text-sm font-bold text-white/80 mb-3 uppercase tracking-wider">Configure Trial Gate</h3>
+            <div className="flex gap-3">
+              <Input 
+                value={topic} 
+                onChange={e => setTopic(e.target.value)} 
+                placeholder="e.g., Quantum Physics, Next.js Middleware, JavaScript Closures" 
+                className="flex-1 bg-black/40 border-white/10"
+                disabled={loading}
+              />
+              <GlowButton onClick={generate} disabled={loading} className="shrink-0">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Open Revision Gate
+              </GlowButton>
+            </div>
+            
+            {loading && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }} 
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 space-y-3"
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-cyan-400 font-semibold">Generating AI Trial...</span>
+                  <span className="text-white/60">{Math.round(loadingProgress)}% • {loadingTime}s</span>
+                </div>
+                <Progress value={loadingProgress} className="h-2 bg-white/10" />
+                <p className="text-[10px] text-white/40">
+                  AI is crafting {20} challenging questions for "{topic}"... This may take up to 2 minutes due to high demand.
+                </p>
+              </motion.div>
+            )}
+          </motion.div>
 
       {quiz && (
         <motion.div variants={stagger} className="space-y-4">
           <div className="flex justify-between items-center px-2">
             <h3 className="font-bold text-lg text-cyan-400">Gate Active: {topic}</h3>
             {graded && (
-              <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider ${score >= 4 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
-                Result: {score >= 4 ? 'S-Rank Clean' : 'Trial Failed'} ({score}/5 Correct)
+              <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider ${score >= 16 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
+                Result: {score >= 16 ? 'S-Rank Clean' : 'Trial Failed'} ({score}/20 Correct)
               </span>
             )}
           </div>
@@ -3601,7 +3757,9 @@ function QuizRevision({ refresh }) {
             </div>
           )}
         </motion.div>
-      )}
+          )}
+        </div>
+      </div>
     </motion.div>
   )
 }
