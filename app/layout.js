@@ -2,6 +2,7 @@ import './globals.css'
 import { Toaster } from 'sonner'
 import InteractionFX from '@/components/InteractionFX'
 import dynamic from 'next/dynamic'
+import { Analytics } from '@vercel/analytics/next'
 const DomainExpansion = dynamic(() => import('@/components/DomainExpansion'), { ssr: false })
 
 export const metadata = {
@@ -40,6 +41,7 @@ export default function RootLayout({ children }) {
             },
           }}
         />
+        <Analytics />
       </body>
     </html>
   )
