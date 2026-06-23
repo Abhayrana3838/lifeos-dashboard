@@ -1610,18 +1610,40 @@ async function handler(request, { params }) {
       // Find the item to determine if we should create related logs
       const item = plan.items?.find(i => i.id === itemId)
       if (item && completed) {
+        // Check if this item was already logged to prevent duplicates
+        const existingLog = await d.collection('study_logs').findOne({
+          userId: currentUser.id,
+          date: today(),
+          notes: { $regex: `Completed from daily plan: ${item.title}` }
+        })
+        
+        if (existingLog) {
+          // Already logged, just update the plan
+          const updatedPlan = await d.collection('daily_plans').findOne({ id }, { projection: { _id: 0 } })
+          return ok(updatedPlan)
+        }
+        
         // Create related tracking entries based on item category
         if (item.category === 'study') {
+          // Extract subject from title - handle various formats
+          let subject = item.title
+          if (subject.startsWith('Study: ')) {
+            subject = subject.replace('Study: ', '')
+          }
+          // Use the description if available for more context
+          const topic = item.description || ''
+          
           await d.collection('study_logs').insertOne({
             id: uuid(),
-            subject: item.title.replace('Study: ', ''),
-            topic: '',
+            subject: subject,
+            topic: topic,
             date: today(),
-            hours: (item.duration || 30) / 60,
+            hours: (item.duration || 30) / 60, // Convert minutes to hours
             difficulty: 'medium',
             understanding: 3,
             notes: `Completed from daily plan: ${item.title}`,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            userId: currentUser.id
           })
         } else if (item.category === 'exercise') {
           await d.collection('exercises').insertOne({
@@ -1631,14 +1653,16 @@ async function handler(request, { params }) {
             date: today(),
             calories: Math.round((item.duration || 30) * 5),
             notes: `Completed from daily plan: ${item.title}`,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            userId: currentUser.id
           })
         } else if (item.category === 'meditation') {
           await d.collection('meditations').insertOne({
             id: uuid(),
             duration: item.duration || 15,
             date: today(),
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            userId: currentUser.id
           })
         } else if (item.category === 'tasks') {
           await d.collection('tasks').insertOne({
@@ -1650,7 +1674,8 @@ async function handler(request, { params }) {
             dueDate: today(),
             status: 'done',
             completedAt: new Date().toISOString(),
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            userId: currentUser.id
           })
         }
       }

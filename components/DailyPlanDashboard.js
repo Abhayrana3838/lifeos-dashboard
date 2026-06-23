@@ -338,20 +338,27 @@ export default function DailyPlanDashboard({ studyLogs, tasks, goals, habits, ex
     // Try to update via API if plan has an ID
     if (plan?.id && typeof plan.id === 'string') {
       try {
+        console.log('Calling API to update daily plan completion:', { itemId, completed: newCompleted, planId: plan.id })
         const response = await fetch(`/api/daily-plans/${plan.id}/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
           body: JSON.stringify({ itemId, completed: newCompleted })
         })
 
+        console.log('API response status:', response.status)
         if (response.ok) {
           const updatedPlan = await response.json()
+          console.log('Updated plan received:', updatedPlan)
           setPlan(updatedPlan)
           setCompletedItems(updatedPlan.completedItems || {})
+        } else {
+          console.error('API response not OK:', await response.text())
         }
       } catch (error) {
         console.error('Failed to update via API:', error)
       }
+    } else {
+      console.log('Plan ID not available, skipping API call')
     }
     
     // Notify parent component
@@ -395,6 +402,84 @@ export default function DailyPlanDashboard({ studyLogs, tasks, goals, habits, ex
     const newCompletedItems = { ...completedItems }
     delete newCompletedItems[itemId]
     setCompletedItems(newCompletedItems)
+  }
+  
+  const logAllToDashboard = async () => {
+    if (!token || !plan) return
+    
+    try {
+      const completedItemIds = Object.keys(completedItems).filter(id => completedItems[id])
+      let successCount = 0
+      let failCount = 0
+      
+      for (const itemId of completedItemIds) {
+        const item = plan.items?.find(i => i.id === itemId)
+        if (!item) continue
+        
+        try {
+          if (item.category === 'study') {
+            const response = await fetch('/api/study-logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                subject: item.title.replace('Study: ', ''),
+                topic: item.description || '',
+                hours: (item.duration || 30) / 60,
+                difficulty: 'medium',
+                understanding: 3,
+                notes: `Logged from daily plan: ${item.title}`
+              })
+            })
+            if (response.ok) successCount++
+            else failCount++
+          } else if (item.category === 'exercise') {
+            // Exercise endpoint doesn't exist, skip for now
+            console.log('Exercise logging skipped - endpoint not available')
+            failCount++
+          } else if (item.category === 'meditation') {
+            const response = await fetch('/api/meditations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                duration: item.duration || 15
+              })
+            })
+            if (response.ok) successCount++
+            else failCount++
+          } else if (item.category === 'tasks') {
+            const response = await fetch('/api/tasks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                title: item.title,
+                description: item.description || '',
+                priority: item.priority || 'medium',
+                category: 'daily',
+                dueDate: new Date().toISOString().slice(0, 10),
+                status: 'done'
+              })
+            })
+            if (response.ok) successCount++
+            else failCount++
+          }
+        } catch (itemError) {
+          console.error('Failed to log item:', item.title, itemError)
+          failCount++
+        }
+      }
+      
+      if (successCount > 0) {
+        alert(`Successfully logged ${successCount} items!${failCount > 0 ? ` (${failCount} failed)` : ''}`)
+        if (onTaskComplete) {
+          onTaskComplete(null, true, null)
+        }
+      } else {
+        alert('Failed to log items. Please try again.')
+      }
+    } catch (error) {
+      console.error('Failed to log items:', error)
+      alert('Failed to log some items. Please try again.')
+    }
   }
   
   const exportPlan = () => {
@@ -700,6 +785,17 @@ export default function DailyPlanDashboard({ studyLogs, tasks, goals, habits, ex
           </div>
           
           <div className="flex items-center gap-2">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={logAllToDashboard}
+              className="px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors text-xs font-medium flex items-center gap-1"
+              title="Log all completed items to dashboard"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Log to Dashboard
+            </motion.button>
+            
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
